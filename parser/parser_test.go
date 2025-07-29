@@ -1,0 +1,88 @@
+package parser
+
+import (
+	"testing"
+
+	"github.com/ocowchun/go-lox/ast"
+	"github.com/ocowchun/go-lox/lexer"
+)
+
+func TestParse(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		// {"empty", "", ""},
+		{"number", "1", "1"},
+		{"string", "\"hello\"", "hello"},
+		{"equal expression", "1 == 2", "(== 1 2)"},
+		{"not equal expression", "1 != 2", "(!= 1 2)"},
+		{"greater than expression", "1 > 2", "(> 1 2)"},
+		{"greater than or equal expression", "1 >= 2", "(>= 1 2)"},
+		{"less than expression", "1 < 2", "(< 1 2)"},
+		{"less than or equal expression", "1 <= 2", "(<= 1 2)"},
+		{"plus expression", "1 + 2", "(+ 1 2)"},
+		{"minus expression", "1 - 2", "(- 1 2)"},
+		{"multiply expression", "1 * 2", "(* 1 2)"},
+		{"divide expression", "1 / 2", "(/ 1 2)"},
+		{"bang expression", "!true", "(! true)"},
+		{"negative expression", "-1", "(- 1)"},
+		{"grouping expression", "(1 + 2)", "(group (+ 1 2))"},
+		{"different precedence case 1", "1 + 2 * 3 - 4", "(- (+ 1 (* 2 3)) 4)"},
+		{"different precedence case 2", "1 > 2 != 2 > 3", "(!= (> 1 2) (> 2 3))"},
+		{"comma operator", "1 + 1, 2", "(begin (+ 1 1) 2)"},
+		{"ternary operator", "1 > 2 ? 1 : 2", "(if (> 1 2) 1 2)"},
+	}
+
+	for _, testCase := range testCases {
+
+		t.Run(testCase.name, func(t *testing.T) {
+			lex := lexer.New(testCase.input)
+			tokens, err := lex.Tokens()
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			p := NewParser(tokens)
+
+			expr, err := p.Parse()
+			if err != nil {
+				t.Fatalf("Failed to parse %s, error: %v", testCase.input, err)
+			}
+
+			printer := ast.AstPrinter{}
+			actual := printer.Print(expr)
+			if actual != testCase.expected {
+				t.Errorf("Expected %s, got %s", testCase.expected, actual)
+			}
+		})
+	}
+}
+
+func TestParseInvalidExpression(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		// {"empty", "", ""},
+		{"number", "1 + !", "1"},
+	}
+
+	for _, testCase := range testCases {
+
+		t.Run(testCase.name, func(t *testing.T) {
+			lex := lexer.New(testCase.input)
+			tokens, err := lex.Tokens()
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			p := NewParser(tokens)
+
+			_, err = p.Parse()
+			if err == nil {
+				t.Fatalf("Expected error for input %s, but got none", testCase.input)
+			}
+		})
+	}
+}
