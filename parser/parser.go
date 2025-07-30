@@ -34,23 +34,23 @@ func (p *Parser) ParseCommaOperator() (ast.Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !p.currentTokenIs(token.TokenTypeComma) {
-		return left, nil
-	} else {
+
+	for p.currentTokenIs(token.TokenTypeComma) {
 		_, err := p.advance()
 		if err != nil {
 			return nil, err
 		}
-
-		right, err := p.ParseCommaOperator()
+		right, err := p.ParseTernary()
 		if err != nil {
 			return nil, err
 		}
-		return &ast.BeginExpression{
+		left = &ast.BeginExpression{
 			Left:  left,
 			Right: right,
-		}, nil
+		}
 	}
+
+	return left, nil
 }
 
 func (p *Parser) ParseTernary() (ast.Expr, error) {
