@@ -2,8 +2,9 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
-	"github.com/ocowchun/go-lox/ast"
+	"github.com/ocowchun/go-lox/interpreter"
 	"github.com/ocowchun/go-lox/parser"
 	"io"
 	"os"
@@ -35,12 +36,30 @@ func runFile(target string) {
 	}
 	defer file.Close()
 
-	run(file)
+	val, err := run(file)
+
+	if err != nil {
+		var runtimeError *interpreter.RuntimeError
+		if errors.As(err, &runtimeError) {
+			fmt.Printf("%s\n[line %d]\n", runtimeError.Message, runtimeError.Token.Line)
+			os.Exit(70)
+		} else {
+			fmt.Println(err)
+			os.Exit(65)
+		}
+	} else {
+		if val != nil {
+			fmt.Println(val)
+		} else {
+			fmt.Println("nil")
+		}
+	}
 	// fmt.Println("Running file:", target)
 }
 
 func runPrompt() {
 	scanner := bufio.NewScanner(os.Stdin)
+	fmt.Println("Running REPL")
 	for {
 		fmt.Print("> ")
 		if !scanner.Scan() {
@@ -51,37 +70,46 @@ func runPrompt() {
 		if line == "exit" {
 			break
 		}
-		err := run(strings.NewReader(line))
+		val, err := run(strings.NewReader(line))
 		if err != nil {
-			fmt.Println(err)
+			var runtimeError *interpreter.RuntimeError
+			if errors.As(err, &runtimeError) {
+				fmt.Printf("%s\n[line %d]\n", runtimeError.Message, runtimeError.Token.Line)
+			} else {
+				fmt.Println(err)
+			}
+		} else {
+			if val != nil {
+				fmt.Println(val)
+			} else {
+				fmt.Println("nil")
+			}
 		}
 	}
 	fmt.Println("Goodbye!")
 }
 
-func run(r io.Reader) error {
-	fmt.Println("Running REPL")
+func run(r io.Reader) (any, error) {
 	buf := new(strings.Builder)
 	_, err := io.Copy(buf, r)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	lex := lexer.New(buf.String())
 
 	tokens, err := lex.Tokens()
 	if err != nil {
-		return fmt.Errorf("lexer error: %s", err)
+		return nil, fmt.Errorf("lexer error: %s", err)
 	}
 	p := parser.NewParser(tokens)
 
 	expr, err := p.Parse()
 	if err != nil {
-		return fmt.Errorf("parse error: %s", err)
+		return nil, fmt.Errorf("parse error: %s", err)
 	}
 
-	printer := ast.AstPrinter{}
-	fmt.Println(printer.Print(expr))
-
-	return nil
+	i := interpreter.New()
+	res := i.Evaluate(expr)
+	return res.Value, res.Error
 }
