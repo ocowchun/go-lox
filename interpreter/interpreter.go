@@ -7,15 +7,37 @@ import (
 )
 
 type Interpreter struct {
+	environment *Environment
 }
 
 func New() *Interpreter {
-	return &Interpreter{}
+	return &Interpreter{
+		environment: NewEnvironment(nil),
+	}
 }
 
 type EvaluatedResult struct {
 	Value any
 	Error error
+}
+
+func (interpreter *Interpreter) Interpret(statements []ast.Stmt) error {
+	for _, stmt := range statements {
+		err := interpreter.execute(stmt)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (interpreter *Interpreter) execute(statement ast.Stmt) error {
+	err := statement.Accept(interpreter)
+	if err != nil {
+		return err.(error)
+	}
+
+	return nil
 }
 
 func (interpreter *Interpreter) Evaluate(expr ast.Expr) EvaluatedResult {
@@ -38,6 +60,73 @@ func NewRuntimeError(token token.Token, message string) *RuntimeError {
 
 func (e *RuntimeError) Error() string {
 	return e.Message
+}
+
+func (interpreter *Interpreter) VisitVarStatement(stmt *ast.VarStatement) any {
+	if stmt.Initializer != nil {
+		initResult := interpreter.Evaluate(stmt.Initializer)
+		if initResult.Error != nil {
+			return initResult.Error
+		}
+		interpreter.environment.Define(stmt.Name.Lexeme, initResult.Value)
+	} else {
+		interpreter.environment.Define(stmt.Name.Lexeme, nil)
+	}
+
+	return nil
+}
+
+func (interpreter *Interpreter) VisitBlockStatement(stmt *ast.BlockStatement) any {
+	err := interpreter.executeBlockStatement(stmt, NewEnvironment(interpreter.environment))
+
+	return err
+}
+
+func (interpreter *Interpreter) executeBlockStatement(stmt *ast.BlockStatement, environment *Environment) error {
+	// TODO: change to pass environment as a parameter to all visit methods
+	previousEnvironment := interpreter.environment
+	interpreter.environment = environment
+
+	defer func() {
+		interpreter.environment = previousEnvironment
+	}()
+
+	for _, statement := range stmt.Statements {
+		err := interpreter.execute(statement)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (interpreter *Interpreter) VisitExpressionStatement(stmt *ast.ExpressionStatement) any {
+	result := interpreter.Evaluate(stmt.Expression)
+	return result.Error
+}
+
+func (interpreter *Interpreter) VisitPrintStatement(stmt *ast.PrintStatement) any {
+	result := interpreter.Evaluate(stmt.Expression)
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.Value != nil {
+		fmt.Println(result.Value)
+	} else {
+		fmt.Println("nil")
+	}
+
+	return nil
+}
+
+func (interpreter *Interpreter) VisitVariableExpression(expr *ast.VariableExpression) any {
+	val, err := interpreter.environment.Get(expr.Name)
+	return EvaluatedResult{
+		Value: val,
+		Error: err,
+	}
 }
 
 func (interpreter *Interpreter) VisitBinaryExpression(expr *ast.BinaryExpression) any {
@@ -281,4 +370,18 @@ func (interpreter *Interpreter) VisitConditionExpression(expr *ast.ConditionExpr
 	//b.WriteString(")")
 	//
 	//return b.String()
+}
+
+func (interpreter *Interpreter) VisitAssignExpression(expr *ast.AssignExpression) any {
+	res := interpreter.Evaluate(expr.Value)
+	if res.Error != nil {
+		return res
+	}
+
+	err := interpreter.environment.Assign(expr.Name, res.Value)
+	if err != nil {
+		return EvaluatedResult{Error: err}
+	}
+
+	return res
 }

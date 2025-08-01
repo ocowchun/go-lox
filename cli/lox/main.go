@@ -36,7 +36,7 @@ func runFile(target string) {
 	}
 	defer file.Close()
 
-	val, err := run(file)
+	err = run(file)
 
 	if err != nil {
 		var runtimeError *interpreter.RuntimeError
@@ -46,12 +46,6 @@ func runFile(target string) {
 		} else {
 			fmt.Println(err)
 			os.Exit(65)
-		}
-	} else {
-		if val != nil {
-			fmt.Println(val)
-		} else {
-			fmt.Println("nil")
 		}
 	}
 	// fmt.Println("Running file:", target)
@@ -70,7 +64,7 @@ func runPrompt() {
 		if line == "exit" {
 			break
 		}
-		val, err := run(strings.NewReader(line))
+		err := run(strings.NewReader(line))
 		if err != nil {
 			var runtimeError *interpreter.RuntimeError
 			if errors.As(err, &runtimeError) {
@@ -78,38 +72,31 @@ func runPrompt() {
 			} else {
 				fmt.Println(err)
 			}
-		} else {
-			if val != nil {
-				fmt.Println(val)
-			} else {
-				fmt.Println("nil")
-			}
 		}
 	}
 	fmt.Println("Goodbye!")
 }
 
-func run(r io.Reader) (any, error) {
+func run(r io.Reader) error {
 	buf := new(strings.Builder)
 	_, err := io.Copy(buf, r)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	lex := lexer.New(buf.String())
 
 	tokens, err := lex.Tokens()
 	if err != nil {
-		return nil, fmt.Errorf("lexer error: %s", err)
+		return fmt.Errorf("lexer error: %s", err)
 	}
 	p := parser.NewParser(tokens)
 
-	expr, err := p.Parse()
+	statements, err := p.Parse()
 	if err != nil {
-		return nil, fmt.Errorf("parse error: %s", err)
+		return fmt.Errorf("parse error: %s", err)
 	}
 
 	i := interpreter.New()
-	res := i.Evaluate(expr)
-	return res.Value, res.Error
+	return i.Interpret(statements)
 }

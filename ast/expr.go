@@ -82,6 +82,27 @@ func (exp *ConditionExpression) Accept(visitor ExprVisitor) any {
 	return visitor.VisitConditionExpression(exp)
 }
 
+type VariableExpression struct {
+	Name token.Token
+}
+
+func (exp *VariableExpression) Expr() {}
+
+func (exp *VariableExpression) Accept(visitor ExprVisitor) any {
+	return visitor.VisitVariableExpression(exp)
+}
+
+type AssignExpression struct {
+	Name  token.Token
+	Value Expr
+}
+
+func (exp *AssignExpression) Expr() {}
+
+func (exp *AssignExpression) Accept(visitor ExprVisitor) any {
+	return visitor.VisitAssignExpression(exp)
+}
+
 type ExprVisitor interface {
 	VisitBinaryExpression(expr *BinaryExpression) any
 	VisitGroupingExpression(expr *GroupingExpression) any
@@ -89,27 +110,29 @@ type ExprVisitor interface {
 	VisitUnaryExpression(expr *UnaryExpression) any
 	VisitBeginExpression(expr *BeginExpression) any
 	VisitConditionExpression(expr *ConditionExpression) any
+	VisitVariableExpression(expr *VariableExpression) any
+	VisitAssignExpression(expr *AssignExpression) any
 }
 
-type AstPrinter struct {
+type ExpressionPrinter struct {
 }
 
-func (printer *AstPrinter) Print(expr Expr) string {
+func (printer *ExpressionPrinter) Print(expr Expr) string {
 	res := expr.Accept(printer).(string)
 
 	return res
 }
 
-func (printer *AstPrinter) VisitBinaryExpression(expr *BinaryExpression) any {
+func (printer *ExpressionPrinter) VisitBinaryExpression(expr *BinaryExpression) any {
 	return fmt.Sprintf("(%s %s %s)", expr.Operator.Lexeme, printer.Print(expr.Left), printer.Print(expr.Right))
 
 }
 
-func (printer *AstPrinter) VisitGroupingExpression(expr *GroupingExpression) any {
+func (printer *ExpressionPrinter) VisitGroupingExpression(expr *GroupingExpression) any {
 	return fmt.Sprintf("(group %s)", printer.Print(expr.Expression))
 }
 
-func (printer *AstPrinter) VisitLiteralExpression(expr *LiteralExpression) any {
+func (printer *ExpressionPrinter) VisitLiteralExpression(expr *LiteralExpression) any {
 	if str, ok := expr.Value.(string); ok {
 		return str
 	} else if num, ok := expr.Value.(float64); ok {
@@ -119,11 +142,11 @@ func (printer *AstPrinter) VisitLiteralExpression(expr *LiteralExpression) any {
 	}
 }
 
-func (printer *AstPrinter) VisitUnaryExpression(expr *UnaryExpression) any {
+func (printer *ExpressionPrinter) VisitUnaryExpression(expr *UnaryExpression) any {
 	return fmt.Sprintf("(%s %s)", expr.Operator.Lexeme, printer.Print(expr.Right))
 }
 
-func (printer *AstPrinter) VisitBeginExpression(expr *BeginExpression) any {
+func (printer *ExpressionPrinter) VisitBeginExpression(expr *BeginExpression) any {
 	var b strings.Builder
 
 	b.WriteString("(begin ")
@@ -135,7 +158,7 @@ func (printer *AstPrinter) VisitBeginExpression(expr *BeginExpression) any {
 	return b.String()
 }
 
-func (printer *AstPrinter) VisitConditionExpression(expr *ConditionExpression) any {
+func (printer *ExpressionPrinter) VisitConditionExpression(expr *ConditionExpression) any {
 	var b strings.Builder
 
 	b.WriteString("(if ")
@@ -147,4 +170,12 @@ func (printer *AstPrinter) VisitConditionExpression(expr *ConditionExpression) a
 	b.WriteString(")")
 
 	return b.String()
+}
+
+func (printer *ExpressionPrinter) VisitVariableExpression(expr *VariableExpression) any {
+	return expr.Name.Lexeme
+}
+
+func (printer *ExpressionPrinter) VisitAssignExpression(expr *AssignExpression) any {
+	return fmt.Sprintf("(set! %s %s)", expr.Name.Lexeme, printer.Print(expr.Value))
 }

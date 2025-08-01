@@ -7,13 +7,54 @@ import (
 	"github.com/ocowchun/go-lox/lexer"
 )
 
-func TestParse(t *testing.T) {
+func TestParser_Parse(t *testing.T) {
 	testCases := []struct {
 		name     string
 		input    string
 		expected string
 	}{
 		// {"empty", "", ""},
+		{"number", "1;", "1"},
+		{"plus expression", "1 + 2;", "(+ 1 2)"},
+		{"print statement", "print 1 + 2;", "(print (+ 1 2))"},
+		{"var statement", "var a = 123;", "(define a 123)"},
+		{"block statement", "{ var a = 123; print a;}", "(begin\n(define a 123)\n(print a)\n)"},
+	}
+
+	for _, testCase := range testCases {
+
+		t.Run(testCase.name, func(t *testing.T) {
+			lex := lexer.New(testCase.input)
+			tokens, err := lex.Tokens()
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			p := NewParser(tokens)
+
+			expr, err := p.Parse()
+			if err != nil {
+				t.Fatalf("Failed to parse %s, error: %v", testCase.input, err)
+			}
+
+			printer := ast.NewStatementPrinter()
+			if len(expr) != 1 {
+				t.Fatalf("Expected 1 statement, got %d", len(expr))
+			}
+			actual := printer.Print(expr[0])
+			if actual != testCase.expected {
+				t.Errorf("Expected %s, got %s", testCase.expected, actual)
+			}
+		})
+	}
+
+}
+
+func TestParser_parseExpression(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
 		{"number", "1", "1"},
 		{"string", "\"hello\"", "hello"},
 		{"equal expression", "1 == 2", "(== 1 2)"},
@@ -33,6 +74,7 @@ func TestParse(t *testing.T) {
 		{"different precedence case 2", "1 > 2 != 2 > 3", "(!= (> 1 2) (> 2 3))"},
 		{"comma operator", "1 + 1, 2", "(begin (+ 1 1) 2)"},
 		{"ternary operator", "1 > 2 ? 1 : 2", "(if (> 1 2) 1 2)"},
+		{"assignment expression", "x = 1 + 2", "(set! x (+ 1 2))"},
 	}
 
 	for _, testCase := range testCases {
@@ -45,12 +87,12 @@ func TestParse(t *testing.T) {
 			}
 			p := NewParser(tokens)
 
-			expr, err := p.Parse()
+			expr, err := p.parseExpression()
 			if err != nil {
 				t.Fatalf("Failed to parse %s, error: %v", testCase.input, err)
 			}
 
-			printer := ast.AstPrinter{}
+			printer := ast.ExpressionPrinter{}
 			actual := printer.Print(expr)
 			if actual != testCase.expected {
 				t.Errorf("Expected %s, got %s", testCase.expected, actual)
@@ -65,7 +107,6 @@ func TestParseInvalidExpression(t *testing.T) {
 		input    string
 		expected string
 	}{
-		// {"empty", "", ""},
 		{"number", "1 + !", "1"},
 	}
 

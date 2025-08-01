@@ -18,7 +18,7 @@ func TestBinaryExpression(t *testing.T) {
 		Operator: token.Token{Type: token.TokenTypePlus, Lexeme: "+"},
 		Right:    &lit2,
 	}
-	printer := AstPrinter{}
+	printer := ExpressionPrinter{}
 
 	result := printer.Print(&exp)
 
@@ -33,7 +33,7 @@ func TestGroupedExpression(t *testing.T) {
 			Value: "hello world",
 		},
 	}
-	printer := AstPrinter{}
+	printer := ExpressionPrinter{}
 
 	result := printer.Print(&exp)
 
@@ -47,7 +47,7 @@ func TestLiteralExpression(t *testing.T) {
 	exp := LiteralExpression{
 		Value: "hello world",
 	}
-	printer := AstPrinter{}
+	printer := ExpressionPrinter{}
 
 	result := printer.Print(&exp)
 
@@ -58,10 +58,10 @@ func TestLiteralExpression(t *testing.T) {
 
 func TestUnaryExpression(t *testing.T) {
 	exp := UnaryExpression{
-		Operator: token.Token{Type: token.TokenTypeMinus, Literal: "-"},
+		Operator: token.Token{Type: token.TokenTypeMinus, Lexeme: "-"},
 		Right:    &LiteralExpression{Value: 123},
 	}
-	printer := AstPrinter{}
+	printer := ExpressionPrinter{}
 
 	result := printer.Print(&exp)
 
