@@ -42,21 +42,22 @@ type EvaluatedResult struct {
 
 func (interpreter *Interpreter) Interpret(statements []ast.Stmt) error {
 	for _, stmt := range statements {
-		err := interpreter.execute(stmt)
-		if err != nil {
-			return err
+		res := interpreter.execute(stmt)
+		if res.Error != nil {
+			return res.Error
 		}
 	}
 	return nil
 }
 
-func (interpreter *Interpreter) execute(statement ast.Stmt) error {
-	err := statement.Accept(interpreter)
-	if err != nil {
-		return err.(error)
-	}
+type StatementResult struct {
+	Value any
+	Error error
+}
 
-	return nil
+func (interpreter *Interpreter) execute(statement ast.Stmt) StatementResult {
+	res := statement.Accept(interpreter).(StatementResult)
+	return res
 }
 
 func (interpreter *Interpreter) Evaluate(expr ast.Expr) EvaluatedResult {
@@ -92,13 +93,13 @@ func (interpreter *Interpreter) VisitWhileStatement(stmt *ast.WhileStatement) an
 			break
 		}
 
-		err := interpreter.execute(stmt.Body)
-		if err != nil {
-			return err
+		res := interpreter.execute(stmt.Body)
+		if res.Error != nil {
+			return res
 		}
 	}
 
-	return nil
+	return StatementResult{}
 }
 
 func (interpreter *Interpreter) VisitIfStatement(stmt *ast.IfStatement) any {
@@ -108,19 +109,12 @@ func (interpreter *Interpreter) VisitIfStatement(stmt *ast.IfStatement) any {
 	}
 
 	if isTruthy(cond.Value) {
-		err := interpreter.execute(stmt.ThenBranch)
-		if err != nil {
-			return err
-		}
-	} else {
-		err := interpreter.execute(stmt.ElseBranch)
-		if err != nil {
-			return err
-		}
-
+		return interpreter.execute(stmt.ThenBranch)
+	} else if stmt.ElseBranch != nil {
+		return interpreter.execute(stmt.ElseBranch)
 	}
 
-	return nil
+	return StatementResult{}
 }
 
 func (interpreter *Interpreter) VisitVarStatement(stmt *ast.VarStatement) any {
@@ -134,16 +128,16 @@ func (interpreter *Interpreter) VisitVarStatement(stmt *ast.VarStatement) any {
 		interpreter.environment.Define(stmt.Name.Lexeme, nil)
 	}
 
-	return nil
+	return StatementResult{}
 }
 
 func (interpreter *Interpreter) VisitBlockStatement(stmt *ast.BlockStatement) any {
-	err := interpreter.executeBlockStatement(stmt, NewEnvironment(interpreter.environment))
+	res := interpreter.executeBlockStatement(stmt, NewEnvironment(interpreter.environment))
 
-	return err
+	return res
 }
 
-func (interpreter *Interpreter) executeBlockStatement(stmt *ast.BlockStatement, environment *Environment) error {
+func (interpreter *Interpreter) executeBlockStatement(stmt *ast.BlockStatement, environment *Environment) StatementResult {
 	// TODO: change to pass environment as a parameter to all visit methods
 	previousEnvironment := interpreter.environment
 	interpreter.environment = environment
@@ -153,13 +147,15 @@ func (interpreter *Interpreter) executeBlockStatement(stmt *ast.BlockStatement, 
 	}()
 
 	for _, statement := range stmt.Statements {
-		err := interpreter.execute(statement)
-		if err != nil {
-			return err
+		res := interpreter.execute(statement)
+		if res.Error != nil {
+			return res
+		} else if _, ok := res.Value.(ReturnValue); ok {
+			return res
 		}
 	}
 
-	return nil
+	return StatementResult{}
 }
 
 type Function struct {
@@ -189,13 +185,21 @@ func (f *Function) Call(interpreter *Interpreter, args []any) EvaluatedResult {
 	}
 
 	// TODO: handle return value
-	err := interpreter.executeBlockStatement(f.declaration.Body, environment)
-	if err != nil {
-		return EvaluatedResult{Error: err}
+	res := interpreter.executeBlockStatement(f.declaration.Body, environment)
+	if res.Error != nil {
+		return EvaluatedResult{Error: res.Error}
 	}
 
-	return EvaluatedResult{
-		Value: nil,
+	if returnValue, ok := res.Value.(ReturnValue); ok {
+		return EvaluatedResult{
+			Value: returnValue.Value,
+		}
+
+	} else {
+		// If no return value is specified, return nil
+		return EvaluatedResult{
+			Value: nil,
+		}
 	}
 }
 
@@ -211,23 +215,36 @@ func (f *Function) String() string {
 func (interpreter *Interpreter) VisitFunctionStatement(stmt *ast.FunctionStatement) any {
 	function := NewFunction(stmt)
 	interpreter.environment.Define(stmt.Name.Lexeme, function)
-	return nil
+
+	return StatementResult{
+		Error: nil,
+	}
 }
 
 func (interpreter *Interpreter) VisitExpressionStatement(stmt *ast.ExpressionStatement) any {
 	result := interpreter.Evaluate(stmt.Expression)
-	return result.Error
+	return StatementResult{
+		Error: result.Error,
+	}
+}
+
+type ReturnValue struct {
+	Value any
 }
 
 func (interpreter *Interpreter) VisitReturnStatement(stmt *ast.ReturnStatement) any {
-	//TODO implement me
-	panic("implement me")
+	result := interpreter.Evaluate(stmt.Value)
+
+	return StatementResult{
+		Value: ReturnValue{Value: result.Value},
+		Error: result.Error,
+	}
 }
 
 func (interpreter *Interpreter) VisitPrintStatement(stmt *ast.PrintStatement) any {
 	result := interpreter.Evaluate(stmt.Expression)
 	if result.Error != nil {
-		return result.Error
+		return StatementResult{Error: result.Error}
 	}
 
 	if result.Value != nil {
@@ -236,7 +253,7 @@ func (interpreter *Interpreter) VisitPrintStatement(stmt *ast.PrintStatement) an
 		fmt.Println("nil")
 	}
 
-	return nil
+	return StatementResult{}
 }
 
 func (interpreter *Interpreter) VisitLogicalExpression(expr *ast.LogicalExpression) any {
@@ -480,6 +497,7 @@ func isTruthy(val any) bool {
 }
 
 func (interpreter *Interpreter) VisitCommaExpression(expr *ast.CommaExpression) any {
+	fmt.Println("===VisitCommaExpression", expr)
 	var res EvaluatedResult
 	for _, subExpr := range expr.Expressions {
 		result := interpreter.Evaluate(subExpr)

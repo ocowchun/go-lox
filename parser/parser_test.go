@@ -83,7 +83,9 @@ func TestParser_parseExpression(t *testing.T) {
 		{"assignment expression", "x = 1 + 2", "(set! x (+ 1 2))"},
 		{"or expression", "a == b or a == c", "(or (== a b) (== a c))"},
 		{"and expression", "a == b and a == c", "(and (== a b) (== a c))"},
-		{"call expression", "foo(1, 2)", "(foo 1 2)"},
+		{"call expression 0", "foo()", "(foo)"},
+		{"call expression 1", "foo(1)", "(foo 1)"},
+		{"call expression 2", "foo(1, 2)", "(foo 1 2)"},
 	}
 
 	for _, testCase := range testCases {

@@ -796,12 +796,12 @@ func (p *Parser) finishCall(callee ast.Expr) (ast.Expr, error) {
 	arguments := make([]ast.Expr, 0)
 
 	if !p.currentTokenIs(token.TokenTypeRightParen) {
-		commaExpression, err := p.parseCommaExpression()
+		expr, err := p.parseCommaExpression()
 		if err != nil {
 			return nil, err
 		}
 
-		if commaExpression, ok := commaExpression.(*ast.CommaExpression); ok {
+		if commaExpression, ok := expr.(*ast.CommaExpression); ok {
 			if len(commaExpression.Expressions) >= 255 {
 				// TODO: might still want to parse the expression since the syntax is valid.
 				return nil, fmt.Errorf("can't have more than 255 arguments., got %d", len(commaExpression.Expressions))
@@ -809,7 +809,7 @@ func (p *Parser) finishCall(callee ast.Expr) (ast.Expr, error) {
 
 			arguments = append(arguments, commaExpression.Expressions...)
 		} else {
-			arguments = append(arguments, commaExpression)
+			arguments = append(arguments, expr)
 		}
 	}
 
