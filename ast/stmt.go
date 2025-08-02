@@ -18,6 +18,8 @@ type StmtVisitor interface {
 	VisitBlockStatement(stmt *BlockStatement) any
 	VisitIfStatement(stmt *IfStatement) any
 	VisitWhileStatement(stmt *WhileStatement) any
+	VisitFunctionStatement(stmt *FunctionStatement) any
+	VisitReturnStatement(stmt *ReturnStatement) any
 }
 
 type ExpressionStatement struct {
@@ -84,6 +86,30 @@ func (stm *WhileStatement) Accept(visitor StmtVisitor) any {
 	return visitor.VisitWhileStatement(stm)
 }
 
+type FunctionStatement struct {
+	Name       token.Token
+	Parameters []token.Token
+	Body       *BlockStatement
+}
+
+func (stmt *FunctionStatement) Stmt() {}
+
+func (stmt *FunctionStatement) Accept(visitor StmtVisitor) any {
+	return visitor.VisitFunctionStatement(stmt)
+}
+
+type ReturnStatement struct {
+	// keep Keyword, so we can use its location for error reporting
+	Keyword token.Token
+	Value   Expr
+}
+
+func (stmt *ReturnStatement) Stmt() {}
+
+func (stmt *ReturnStatement) Accept(visitor StmtVisitor) any {
+	return visitor.VisitReturnStatement(stmt)
+}
+
 type StatementPrinter struct {
 	expressionPrinter *ExpressionPrinter
 }
@@ -147,4 +173,26 @@ func (printer *StatementPrinter) VisitWhileStatement(stmt *WhileStatement) any {
 	b.WriteString(printer.Print(stmt.Body))
 	b.WriteString(")")
 	return b.String()
+}
+
+func (printer *StatementPrinter) VisitFunctionStatement(stmt *FunctionStatement) any {
+	var b strings.Builder
+	b.WriteString("(define (")
+	b.WriteString(stmt.Name.Lexeme)
+	for _, param := range stmt.Parameters {
+		b.WriteString(" ")
+		b.WriteString(param.Lexeme)
+	}
+	b.WriteString(")\n")
+
+	for _, s := range stmt.Body.Statements {
+		b.WriteString(printer.Print(s))
+		b.WriteString("\n")
+	}
+	b.WriteString(")")
+	return b.String()
+}
+
+func (printer *StatementPrinter) VisitReturnStatement(stmt *ReturnStatement) any {
+	return fmt.Sprintf("(return %s)", stmt.Value.Accept(printer.expressionPrinter))
 }

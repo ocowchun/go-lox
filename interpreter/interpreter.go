@@ -4,15 +4,34 @@ import (
 	"fmt"
 	"github.com/ocowchun/go-lox/ast"
 	"github.com/ocowchun/go-lox/token"
+	"time"
 )
 
 type Interpreter struct {
 	environment *Environment
 }
 
+// TODO: move builtin to a separate file
+type clockFunction struct {
+}
+
+func (c *clockFunction) Call(interpreter *Interpreter, args []any) EvaluatedResult {
+	return EvaluatedResult{
+		Value: float64(time.Now().Unix()),
+	}
+}
+
+func (c *clockFunction) Arity() int {
+	return 0
+}
+
 func New() *Interpreter {
+	global := NewEnvironment(nil)
+
+	global.Define("clock", &clockFunction{})
+
 	return &Interpreter{
-		environment: NewEnvironment(nil),
+		environment: global,
 	}
 }
 
@@ -143,9 +162,66 @@ func (interpreter *Interpreter) executeBlockStatement(stmt *ast.BlockStatement, 
 	return nil
 }
 
+type Function struct {
+	declaration *ast.FunctionStatement
+}
+
+func NewFunction(declaration *ast.FunctionStatement) *Function {
+	return &Function{
+		declaration: declaration,
+	}
+}
+
+func (f *Function) Call(interpreter *Interpreter, args []any) EvaluatedResult {
+	environment := NewEnvironment(interpreter.environment)
+
+	if len(args) != f.Arity() {
+		return EvaluatedResult{
+			Error: NewRuntimeError(
+				f.declaration.Name,
+				fmt.Sprintf("expected %d arguments but got %d", f.Arity(), len(args)),
+			),
+		}
+	}
+
+	for i, param := range f.declaration.Parameters {
+		environment.Define(param.Lexeme, args[i])
+	}
+
+	// TODO: handle return value
+	err := interpreter.executeBlockStatement(f.declaration.Body, environment)
+	if err != nil {
+		return EvaluatedResult{Error: err}
+	}
+
+	return EvaluatedResult{
+		Value: nil,
+	}
+}
+
+func (f *Function) Arity() int {
+	return len(f.declaration.Parameters)
+}
+
+func (f *Function) String() string {
+	printer := ast.NewStatementPrinter()
+	return printer.Print(f.declaration)
+}
+
+func (interpreter *Interpreter) VisitFunctionStatement(stmt *ast.FunctionStatement) any {
+	function := NewFunction(stmt)
+	interpreter.environment.Define(stmt.Name.Lexeme, function)
+	return nil
+}
+
 func (interpreter *Interpreter) VisitExpressionStatement(stmt *ast.ExpressionStatement) any {
 	result := interpreter.Evaluate(stmt.Expression)
 	return result.Error
+}
+
+func (interpreter *Interpreter) VisitReturnStatement(stmt *ast.ReturnStatement) any {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (interpreter *Interpreter) VisitPrintStatement(stmt *ast.PrintStatement) any {
@@ -403,18 +479,19 @@ func isTruthy(val any) bool {
 	return true
 }
 
-func (interpreter *Interpreter) VisitBeginExpression(expr *ast.BeginExpression) any {
-	// TODO
-	return nil
-	//var b strings.Builder
-	//
-	//b.WriteString("(begin ")
-	//b.WriteString(interpreter.Evaluate(expr.Left))
-	//b.WriteString(" ")
-	//b.WriteString(interpreter.Evaluate(expr.Right))
-	//b.WriteString(")")
-	//
-	//return b.String()
+func (interpreter *Interpreter) VisitCommaExpression(expr *ast.CommaExpression) any {
+	var res EvaluatedResult
+	for _, subExpr := range expr.Expressions {
+		result := interpreter.Evaluate(subExpr)
+		if result.Error != nil {
+			return result
+		}
+
+		// Update res with the last evaluated value
+		res = result
+	}
+
+	return res
 }
 
 func (interpreter *Interpreter) VisitConditionExpression(expr *ast.ConditionExpression) any {
@@ -445,4 +522,46 @@ func (interpreter *Interpreter) VisitAssignExpression(expr *ast.AssignExpression
 	}
 
 	return res
+}
+
+func (interpreter *Interpreter) VisitCallExpression(expr *ast.CallExpression) any {
+	evaluatedResult := interpreter.Evaluate(expr.Callee)
+	if evaluatedResult.Error != nil {
+		return evaluatedResult
+	}
+
+	var function Callable
+	if callable, ok := evaluatedResult.Value.(Callable); ok {
+		function = callable
+	} else {
+		runtimeErr := NewRuntimeError(
+			expr.Paren,
+			fmt.Sprintf("can only call functions and classes, got %T", evaluatedResult.Value),
+		)
+		return EvaluatedResult{Error: runtimeErr}
+	}
+
+	if len(expr.Arguments) != function.Arity() {
+		runtimeErr := NewRuntimeError(
+			expr.Paren,
+			fmt.Sprintf("expected %d arguments but got %d", function.Arity(), len(expr.Arguments)),
+		)
+		return EvaluatedResult{Error: runtimeErr}
+	}
+
+	args := make([]any, 0, len(expr.Arguments))
+	for _, argExp := range expr.Arguments {
+		evaluatedResult = interpreter.Evaluate(argExp)
+		if evaluatedResult.Error != nil {
+			return evaluatedResult
+		}
+		args = append(args, evaluatedResult.Value)
+	}
+
+	return function.Call(interpreter, args)
+}
+
+type Callable interface {
+	Call(interpreter *Interpreter, args []any) EvaluatedResult
+	Arity() int
 }

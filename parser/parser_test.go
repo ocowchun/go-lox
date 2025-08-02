@@ -23,6 +23,8 @@ func TestParser_Parse(t *testing.T) {
 		{"if else statement", "if (a > b) { print a; } else { print b; }", "(if (> a b) (begin\n(print a)\n) (begin\n(print b)\n))"},
 		{"while statement", "while (i < 5) { i = i + 1;}", "(while (< i 5) (begin\n(set! i (+ i 1))\n))"},
 		{"for statement", "for (var i = 0; i < 5; i = i + 1) { print i;}", "(begin\n(define i 0)\n(while (< i 5) (begin\n(begin\n(print i)\n)\n(set! i (+ i 1))\n))\n)"},
+		{"function statement", "fun foo(a, b) { print a + b; }", "(define (foo a b)\n(print (+ a b))\n)"},
+		{"return statement", "return 1 + 2;", "(return (+ 1 2))"},
 	}
 
 	for _, testCase := range testCases {
@@ -81,6 +83,7 @@ func TestParser_parseExpression(t *testing.T) {
 		{"assignment expression", "x = 1 + 2", "(set! x (+ 1 2))"},
 		{"or expression", "a == b or a == c", "(or (== a b) (== a c))"},
 		{"and expression", "a == b and a == c", "(and (== a b) (== a c))"},
+		{"call expression", "foo(1, 2)", "(foo 1 2)"},
 	}
 
 	for _, testCase := range testCases {
