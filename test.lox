@@ -1,24 +1,13 @@
-fun fib(n) {
-    if (n < 2) {
-        return 1;
-    }
-    return fib2(2, 1, 1, n);
+fun makeCounter() {
+  var i = 0;
+  fun count() {
+    i = i + 1;
+    print i;
+  }
+
+  return count;
 }
 
-fun fib2(current, n1, n2, target) {
-    if (target == 0 or target == 1) {
-        return 1;
-    }
-
-    if (current == target) {
-        return n1 + n2;
-    }
-
-    return fib2(current + 1, n1 + n2, n1, target);
-}
-
-var before = clock();
-print fib(30);
-print " ";
-print clock() - before;
-
+var counter = makeCounter();
+counter(); // "1".
+counter(); // "2".

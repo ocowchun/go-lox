@@ -160,16 +160,18 @@ func (interpreter *Interpreter) executeBlockStatement(stmt *ast.BlockStatement, 
 
 type Function struct {
 	declaration *ast.FunctionStatement
+	closure     *Environment // The environment in which the function was defined
 }
 
-func NewFunction(declaration *ast.FunctionStatement) *Function {
+func NewFunction(declaration *ast.FunctionStatement, closure *Environment) *Function {
 	return &Function{
 		declaration: declaration,
+		closure:     closure,
 	}
 }
 
 func (f *Function) Call(interpreter *Interpreter, args []any) EvaluatedResult {
-	environment := NewEnvironment(interpreter.environment)
+	environment := NewEnvironment(f.closure)
 
 	if len(args) != f.Arity() {
 		return EvaluatedResult{
@@ -213,7 +215,7 @@ func (f *Function) String() string {
 }
 
 func (interpreter *Interpreter) VisitFunctionStatement(stmt *ast.FunctionStatement) any {
-	function := NewFunction(stmt)
+	function := NewFunction(stmt, interpreter.environment)
 	interpreter.environment.Define(stmt.Name.Lexeme, function)
 
 	return StatementResult{
