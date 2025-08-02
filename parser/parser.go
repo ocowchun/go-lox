@@ -87,13 +87,200 @@ func (p *Parser) parseVarDeclaration() (ast.Stmt, error) {
 }
 
 func (p *Parser) ParseStatement() (ast.Stmt, error) {
-	if p.currentTokenIs(token.TokenTypePrint) {
+	switch p.currentToken().Type {
+	case token.TokenTypeIf:
+		return p.parseIfStatement()
+	case token.TokenTypePrint:
 		return p.parsePrintStatement()
-	} else if p.currentTokenIs(token.TokenTypeLeftBrace) {
+	case token.TokenTypeLeftBrace:
 		return p.parseBlockStatement()
+	case token.TokenTypeWhile:
+		return p.parseWhileStatement()
+	case token.TokenTypeFor:
+		return p.parseForStatement()
+	default:
+		return p.parseExpressionStatement()
+	}
+}
+
+func (p *Parser) parseForStatement() (ast.Stmt, error) {
+	if !p.currentTokenIs(token.TokenTypeFor) {
+		return nil, fmt.Errorf("expected `for` but got token %s", p.currentToken().Type)
+	} else {
+		_, err := p.advance()
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return p.parseExpressionStatement()
+	_, err := p.consume(token.TokenTypeLeftParen, "expect '(' after `for`")
+	if err != nil {
+		return nil, err
+	}
+
+	var initializer ast.Stmt
+	if p.currentTokenIs(token.TokenTypeSemicolon) {
+		_, err = p.advance()
+		if err != nil {
+			return nil, err
+		}
+	} else if p.currentTokenIs(token.TokenTypeVar) {
+		initializer, err = p.parseVarDeclaration()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		initializer, err = p.parseExpressionStatement()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var condition ast.Expr
+	if !p.currentTokenIs(token.TokenTypeSemicolon) {
+		condition, err = p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+	}
+	_, err = p.consume(token.TokenTypeSemicolon, "expect ';' after loop condition.")
+	if err != nil {
+		return nil, err
+	}
+
+	var increment ast.Expr
+	if !p.currentTokenIs(token.TokenTypeRightParen) {
+		increment, err = p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+	}
+	_, err = p.consume(token.TokenTypeRightParen, "expect ')' after loop clauses.")
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := p.ParseStatement()
+
+	if increment != nil {
+		body = &ast.BlockStatement{
+			Statements: []ast.Stmt{
+				body,
+				&ast.ExpressionStatement{
+					Expression: increment,
+				},
+			},
+		}
+	}
+
+	if condition == nil {
+		condition = &ast.LiteralExpression{Value: true}
+	}
+	body = &ast.WhileStatement{
+		Condition: condition,
+		Body:      body,
+	}
+
+	if initializer != nil {
+		body = &ast.BlockStatement{
+			Statements: []ast.Stmt{
+				initializer,
+				body,
+			},
+		}
+	}
+
+	return body, nil
+}
+
+func (p *Parser) parseWhileStatement() (ast.Stmt, error) {
+	if !p.currentTokenIs(token.TokenTypeWhile) {
+		return nil, fmt.Errorf("expected `while` but got token %s", p.currentToken().Type)
+	} else {
+		_, err := p.advance()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	_, err := p.consume(token.TokenTypeLeftParen, "expect '(' after `while`")
+	if err != nil {
+		return nil, err
+	}
+
+	condition, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = p.consume(token.TokenTypeRightParen, "expect ')' after `while` condition")
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := p.ParseStatement()
+	if err != nil {
+		return nil, err
+	}
+
+	return &ast.WhileStatement{
+		Condition: condition,
+		Body:      body,
+	}, nil
+}
+
+func (p *Parser) parseIfStatement() (ast.Stmt, error) {
+	if !p.currentTokenIs(token.TokenTypeIf) {
+		return nil, fmt.Errorf("expected `if` but got token %s", p.currentToken().Type)
+	} else {
+		_, err := p.advance()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	_, err := p.consume(token.TokenTypeLeftParen, "expect '(' after `if`")
+	if err != nil {
+		return nil, err
+	}
+
+	condition, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = p.consume(token.TokenTypeRightParen, "expect ')' after `if` condition")
+	if err != nil {
+		return nil, err
+	}
+
+	thenBranch, err := p.ParseStatement()
+	if err != nil {
+		return nil, err
+	}
+
+	if p.currentTokenIs(token.TokenTypeElse) {
+		_, err := p.advance()
+		if err != nil {
+			return nil, err
+		}
+
+		elseBranch, err := p.ParseStatement()
+		if err != nil {
+			return nil, err
+		}
+
+		return &ast.IfStatement{
+			Condition:  condition,
+			ThenBranch: thenBranch,
+			ElseBranch: elseBranch,
+		}, nil
+	}
+
+	return &ast.IfStatement{
+		Condition:  condition,
+		ThenBranch: thenBranch,
+	}, nil
 }
 
 func (p *Parser) parsePrintStatement() (ast.Stmt, error) {
@@ -227,7 +414,7 @@ func (p *Parser) parseAssignment() (ast.Expr, error) {
 
 func (p *Parser) parseTernary() (ast.Expr, error) {
 	// predicate ? exp1 : exp2
-	predicate, err := p.ParseEquality()
+	predicate, err := p.ParseOr()
 	if err != nil {
 		return nil, err
 	}
@@ -263,6 +450,58 @@ func (p *Parser) parseTernary() (ast.Expr, error) {
 		Alternative: alternative,
 	}, nil
 
+}
+
+func (p *Parser) ParseOr() (ast.Expr, error) {
+	expr, err := p.ParseAnd()
+	if err != nil {
+		return nil, err
+	}
+	for p.currentTokenIs(token.TokenTypeOr) {
+		op, err := p.advance()
+		if err != nil {
+			return nil, err
+		}
+
+		right, err := p.ParseAnd()
+		if err != nil {
+			return nil, err
+		}
+
+		expr = &ast.LogicalExpression{
+			Left:     expr,
+			Operator: op,
+			Right:    right,
+		}
+	}
+
+	return expr, nil
+}
+
+func (p *Parser) ParseAnd() (ast.Expr, error) {
+	expr, err := p.ParseEquality()
+	if err != nil {
+		return nil, err
+	}
+	for p.currentTokenIs(token.TokenTypeAnd) {
+		op, err := p.advance()
+		if err != nil {
+			return nil, err
+		}
+
+		right, err := p.ParseEquality()
+		if err != nil {
+			return nil, err
+		}
+
+		expr = &ast.LogicalExpression{
+			Left:     expr,
+			Operator: op,
+			Right:    right,
+		}
+	}
+
+	return expr, nil
 }
 
 func (p *Parser) ParseEquality() (ast.Expr, error) {
@@ -330,7 +569,7 @@ func (p *Parser) consume(tokenType token.TokenType, errorMessage string) (token.
 		}
 		return t, nil
 	} else {
-		return token.Token{}, fmt.Errorf(errorMessage)
+		return token.Token{}, fmt.Errorf("%s got token %s", errorMessage, p.currentToken().Lexeme)
 	}
 }
 

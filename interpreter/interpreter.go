@@ -62,6 +62,48 @@ func (e *RuntimeError) Error() string {
 	return e.Message
 }
 
+func (interpreter *Interpreter) VisitWhileStatement(stmt *ast.WhileStatement) any {
+	for {
+		cond := interpreter.Evaluate(stmt.Condition)
+		if cond.Error != nil {
+			return cond.Error
+		}
+
+		if !isTruthy(cond.Value) {
+			break
+		}
+
+		err := interpreter.execute(stmt.Body)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (interpreter *Interpreter) VisitIfStatement(stmt *ast.IfStatement) any {
+	cond := interpreter.Evaluate(stmt.Condition)
+	if cond.Error != nil {
+		return cond.Error
+	}
+
+	if isTruthy(cond.Value) {
+		err := interpreter.execute(stmt.ThenBranch)
+		if err != nil {
+			return err
+		}
+	} else {
+		err := interpreter.execute(stmt.ElseBranch)
+		if err != nil {
+			return err
+		}
+
+	}
+
+	return nil
+}
+
 func (interpreter *Interpreter) VisitVarStatement(stmt *ast.VarStatement) any {
 	if stmt.Initializer != nil {
 		initResult := interpreter.Evaluate(stmt.Initializer)
@@ -119,6 +161,25 @@ func (interpreter *Interpreter) VisitPrintStatement(stmt *ast.PrintStatement) an
 	}
 
 	return nil
+}
+
+func (interpreter *Interpreter) VisitLogicalExpression(expr *ast.LogicalExpression) any {
+	left := interpreter.Evaluate(expr.Left)
+	if left.Error != nil {
+		return left
+	}
+
+	if expr.Operator.Type == token.TokenTypeOr {
+		if isTruthy(left.Value) {
+			return left
+		}
+	} else {
+		if !isTruthy(left.Value) {
+			return left
+		}
+	}
+
+	return interpreter.Evaluate(expr.Right)
 }
 
 func (interpreter *Interpreter) VisitVariableExpression(expr *ast.VariableExpression) any {

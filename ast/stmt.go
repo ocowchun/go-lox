@@ -16,6 +16,8 @@ type StmtVisitor interface {
 	VisitPrintStatement(stmt *PrintStatement) any
 	VisitVarStatement(stmt *VarStatement) any
 	VisitBlockStatement(stmt *BlockStatement) any
+	VisitIfStatement(stmt *IfStatement) any
+	VisitWhileStatement(stmt *WhileStatement) any
 }
 
 type ExpressionStatement struct {
@@ -59,6 +61,29 @@ func (stmt *BlockStatement) Accept(visitor StmtVisitor) any {
 	return visitor.VisitBlockStatement(stmt)
 }
 
+type IfStatement struct {
+	Condition  Expr
+	ThenBranch Stmt
+	ElseBranch Stmt
+}
+
+func (stmt *IfStatement) Stmt() {}
+
+func (stmt *IfStatement) Accept(visitor StmtVisitor) any {
+	return visitor.VisitIfStatement(stmt)
+}
+
+type WhileStatement struct {
+	Condition Expr
+	Body      Stmt
+}
+
+func (stm *WhileStatement) Stmt() {}
+
+func (stm *WhileStatement) Accept(visitor StmtVisitor) any {
+	return visitor.VisitWhileStatement(stm)
+}
+
 type StatementPrinter struct {
 	expressionPrinter *ExpressionPrinter
 }
@@ -94,6 +119,32 @@ func (printer *StatementPrinter) VisitBlockStatement(stmt *BlockStatement) any {
 		b.WriteString(printer.Print(s))
 		b.WriteString("\n")
 	}
+	b.WriteString(")")
+	return b.String()
+}
+
+func (printer *StatementPrinter) VisitIfStatement(stmt *IfStatement) any {
+	var b strings.Builder
+	b.WriteString("(if ")
+	b.WriteString(printer.expressionPrinter.Print(stmt.Condition))
+
+	b.WriteString(" ")
+	b.WriteString(printer.Print(stmt.ThenBranch))
+	if stmt.ElseBranch != nil {
+		b.WriteString(" ")
+		b.WriteString(printer.Print(stmt.ElseBranch))
+	}
+	b.WriteString(")")
+	return b.String()
+}
+
+func (printer *StatementPrinter) VisitWhileStatement(stmt *WhileStatement) any {
+	var b strings.Builder
+	b.WriteString("(while ")
+	b.WriteString(printer.expressionPrinter.Print(stmt.Condition))
+
+	b.WriteString(" ")
+	b.WriteString(printer.Print(stmt.Body))
 	b.WriteString(")")
 	return b.String()
 }

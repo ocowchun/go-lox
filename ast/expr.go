@@ -103,6 +103,18 @@ func (exp *AssignExpression) Accept(visitor ExprVisitor) any {
 	return visitor.VisitAssignExpression(exp)
 }
 
+type LogicalExpression struct {
+	Left     Expr
+	Operator token.Token
+	Right    Expr
+}
+
+func (exp *LogicalExpression) Expr() {}
+
+func (exp *LogicalExpression) Accept(visitor ExprVisitor) any {
+	return visitor.VisitLogicalExpression(exp)
+}
+
 type ExprVisitor interface {
 	VisitBinaryExpression(expr *BinaryExpression) any
 	VisitGroupingExpression(expr *GroupingExpression) any
@@ -112,6 +124,7 @@ type ExprVisitor interface {
 	VisitConditionExpression(expr *ConditionExpression) any
 	VisitVariableExpression(expr *VariableExpression) any
 	VisitAssignExpression(expr *AssignExpression) any
+	VisitLogicalExpression(expr *LogicalExpression) any
 }
 
 type ExpressionPrinter struct {
@@ -178,4 +191,8 @@ func (printer *ExpressionPrinter) VisitVariableExpression(expr *VariableExpressi
 
 func (printer *ExpressionPrinter) VisitAssignExpression(expr *AssignExpression) any {
 	return fmt.Sprintf("(set! %s %s)", expr.Name.Lexeme, printer.Print(expr.Value))
+}
+
+func (printer *ExpressionPrinter) VisitLogicalExpression(expr *LogicalExpression) any {
+	return fmt.Sprintf("(%s %s %s)", expr.Operator.Lexeme, printer.Print(expr.Left), printer.Print(expr.Right))
 }
