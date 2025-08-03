@@ -9,6 +9,8 @@ import (
 
 type Interpreter struct {
 	environment *Environment
+	globals     *Environment
+	locals      map[ast.Expr]int
 }
 
 // TODO: move builtin to a separate file
@@ -26,18 +28,32 @@ func (c *clockFunction) Arity() int {
 }
 
 func New() *Interpreter {
-	global := NewEnvironment(nil)
+	globals := NewEnvironment(nil)
 
-	global.Define("clock", &clockFunction{})
+	globals.Define("clock", &clockFunction{})
 
 	return &Interpreter{
-		environment: global,
+		globals:     globals,
+		environment: globals,
+		locals:      make(map[ast.Expr]int),
 	}
 }
 
 type EvaluatedResult struct {
 	Value any
 	Error error
+}
+
+func (interpreter *Interpreter) resolve(expr ast.Expr, depth int) {
+	interpreter.locals[expr] = depth
+}
+
+func (interpreter *Interpreter) lookupVariable(name token.Token, expr ast.Expr) (any, error) {
+	if depth, ok := interpreter.locals[expr]; ok {
+		return interpreter.environment.GetAt(name, depth)
+	}
+
+	return interpreter.globals.Get(name)
 }
 
 func (interpreter *Interpreter) Interpret(statements []ast.Stmt) error {
@@ -277,7 +293,7 @@ func (interpreter *Interpreter) VisitLogicalExpression(expr *ast.LogicalExpressi
 }
 
 func (interpreter *Interpreter) VisitVariableExpression(expr *ast.VariableExpression) any {
-	val, err := interpreter.environment.Get(expr.Name)
+	val, err := interpreter.lookupVariable(expr.Name, expr)
 	return EvaluatedResult{
 		Value: val,
 		Error: err,
@@ -498,7 +514,6 @@ func isTruthy(val any) bool {
 }
 
 func (interpreter *Interpreter) VisitCommaExpression(expr *ast.CommaExpression) any {
-	fmt.Println("===VisitCommaExpression", expr)
 	var res EvaluatedResult
 	for _, subExpr := range expr.Expressions {
 		result := interpreter.Evaluate(subExpr)
@@ -516,17 +531,6 @@ func (interpreter *Interpreter) VisitCommaExpression(expr *ast.CommaExpression) 
 func (interpreter *Interpreter) VisitConditionExpression(expr *ast.ConditionExpression) any {
 	// TODO
 	return nil
-	//var b strings.Builder
-	//
-	//b.WriteString("(if ")
-	//b.WriteString(interpreter.Evaluate(expr.Predicate))
-	//b.WriteString(" ")
-	//b.WriteString(interpreter.Evaluate(expr.Consequent))
-	//b.WriteString(" ")
-	//b.WriteString(interpreter.Evaluate(expr.Alternative))
-	//b.WriteString(")")
-	//
-	//return b.String()
 }
 
 func (interpreter *Interpreter) VisitAssignExpression(expr *ast.AssignExpression) any {
@@ -535,9 +539,16 @@ func (interpreter *Interpreter) VisitAssignExpression(expr *ast.AssignExpression
 		return res
 	}
 
-	err := interpreter.environment.Assign(expr.Name, res.Value)
-	if err != nil {
-		return EvaluatedResult{Error: err}
+	if depth, ok := interpreter.locals[expr]; ok {
+		err := interpreter.environment.AssignAt(expr.Name, depth, res.Value)
+		if err != nil {
+			return EvaluatedResult{Error: err}
+		}
+	} else {
+		err := interpreter.globals.Assign(expr.Name, res.Value)
+		if err != nil {
+			return EvaluatedResult{Error: err}
+		}
 	}
 
 	return res

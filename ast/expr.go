@@ -97,6 +97,9 @@ func (exp *AssignExpression) Accept(visitor ExprVisitor) any {
 	return visitor.VisitAssignExpression(exp)
 }
 
+// LogicalExpression represents a logical operation, such as AND or OR.
+// It is used to handle short-circuit evaluation in the interpreter.
+// That's why we can't use BinaryExpression for this purpose, as it does not support short-circuiting.
 type LogicalExpression struct {
 	Left     Expr
 	Operator token.Token

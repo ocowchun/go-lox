@@ -127,7 +127,7 @@ func (p *Parser) parseVarDeclaration() (ast.Stmt, error) {
 		return nil, err
 	}
 	varDeclaration := &ast.VarStatement{
-		Name: &name,
+		Name: name,
 	}
 
 	if p.currentTokenIs(token.TokenTypeEqual) {

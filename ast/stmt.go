@@ -41,7 +41,7 @@ func (stmt *PrintStatement) Accept(visitor StmtVisitor) any {
 }
 
 type VarStatement struct {
-	Name        *token.Token
+	Name        token.Token
 	Initializer Expr
 }
 

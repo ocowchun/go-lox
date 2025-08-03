@@ -98,5 +98,13 @@ func run(r io.Reader) error {
 	}
 
 	i := interpreter.New()
+	resolver := interpreter.NewResolver(i)
+	for _, stmt := range statements {
+		err = resolver.ResolveStatement(stmt)
+		if err != nil {
+			return fmt.Errorf("resolver error: %s", err)
+		}
+	}
+
 	return i.Interpret(statements)
 }

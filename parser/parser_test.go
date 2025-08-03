@@ -63,6 +63,7 @@ func TestParser_parseExpression(t *testing.T) {
 	}{
 		{"number", "1", "1"},
 		{"string", "\"hello\"", "hello"},
+		{"variable", "foo", "foo"},
 		{"equal expression", "1 == 2", "(== 1 2)"},
 		{"not equal expression", "1 != 2", "(!= 1 2)"},
 		{"greater than expression", "1 > 2", "(> 1 2)"},
