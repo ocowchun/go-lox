@@ -114,3 +114,15 @@ func run(r io.Reader) error {
 
 	return i.Interpret(statements)
 }
+
+//func foo(a int) {
+//	f1 := func() {
+//		var a string
+//		a = "foo"
+//
+//		fmt.Println("Hello, World!", a)
+//	}
+//
+//	f1()
+//
+//}

@@ -1,9 +1,13 @@
 var a = "global";
 var a = "global-2";
-{
+fun foo(boo) {
   var showA = fun() {
     print a;
   };
+
+  // var boo = 123;
+
+  // var neverUsed = "can you find me";
 
   showA();
   var a = "block";
@@ -12,4 +16,6 @@ var a = "global-2";
   showA();
 }
 
-return "at top level";
+foo(123);
+
+// return "at top level";

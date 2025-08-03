@@ -13,16 +13,24 @@ const (
 	FunctionTypeFunction
 )
 
+type NameMetadata struct {
+	// Whether the name is initialized
+	initialized bool
+
+	// Whether the name is used in the current/inner scope
+	used bool
+}
+
 type Resolver struct {
 	interpreter         *Interpreter
-	scopes              []map[string]bool
+	scopes              []map[string]*NameMetadata
 	currentFunctionType FunctionType
 }
 
 func NewResolver(interpreter *Interpreter) *Resolver {
 	return &Resolver{
 		interpreter:         interpreter,
-		scopes:              []map[string]bool{},
+		scopes:              []map[string]*NameMetadata{},
 		currentFunctionType: FunctionTypeNone,
 	}
 }
@@ -44,7 +52,7 @@ func (r *Resolver) ResolveExpression(expr ast.Expr) error {
 }
 
 func (r *Resolver) beginScope() {
-	scope := make(map[string]bool)
+	scope := make(map[string]*NameMetadata)
 	r.scopes = append(r.scopes, scope)
 }
 
@@ -64,7 +72,10 @@ func (r *Resolver) declare(name token.Token) error {
 	if _, exists := scope[name.Lexeme]; exists {
 		return NewResolveError(name, fmt.Sprintf("Already a variable with this name `%s` in this scope.", name.Lexeme))
 	}
-	scope[name.Lexeme] = false // Mark as declared but not initialized
+	scope[name.Lexeme] = &NameMetadata{
+		initialized: false, // Mark as declared but not initialized
+		used:        false, // Not used yet
+	}
 
 	return nil
 }
@@ -75,7 +86,7 @@ func (r *Resolver) define(name token.Token) error {
 	}
 
 	scope := r.scopes[len(r.scopes)-1]
-	scope[name.Lexeme] = true
+	scope[name.Lexeme].initialized = true // Mark as initialized
 
 	return nil
 }
@@ -117,6 +128,21 @@ func (r *Resolver) VisitBlockStatement(stmt *ast.BlockStatement) any {
 		if err != nil {
 			return err
 		}
+	}
+
+	if r.currentFunctionType == FunctionTypeFunction {
+		parametersScope := r.scopes[len(r.scopes)-2]
+		blockScope := r.scopes[len(r.scopes)-1]
+		for name, metadata := range blockScope {
+			if _, ok := parametersScope[name]; ok {
+				return NewResolveError(token.Token{Lexeme: name}, fmt.Sprintf("Local variable `%s` conflicts with parameter.", name))
+			}
+
+			if !metadata.used {
+				return NewResolveError(token.Token{Lexeme: name}, fmt.Sprintf("Local variable `%s` is declared but never used.", name))
+			}
+		}
+
 	}
 
 	return nil
@@ -175,6 +201,7 @@ func (r *Resolver) resolveFunction(parameters []token.Token, body *ast.BlockStat
 		r.endScope()
 	}()
 
+	//parameter
 	for _, param := range parameters {
 		err := r.declare(param)
 		if err != nil {
@@ -193,7 +220,7 @@ func (r *Resolver) VisitReturnStatement(stmt *ast.ReturnStatement) any {
 	if r.currentFunctionType == FunctionTypeNone {
 		return NewResolveError(stmt.Keyword, "Can't return from top-level code.")
 	}
-	
+
 	if stmt.Value != nil {
 		return r.ResolveExpression(stmt.Value)
 	}
@@ -265,15 +292,16 @@ func (r *Resolver) resolveLocal(expr ast.Expr, name token.Token) error {
 
 func (r *Resolver) VisitVariableExpression(expr *ast.VariableExpression) any {
 	if len(r.scopes) > 0 {
-		defined, ok := r.scopes[len(r.scopes)-1][expr.Name.Lexeme]
+		metadata, ok := r.scopes[len(r.scopes)-1][expr.Name.Lexeme]
 		if !ok {
 			// Variable is not defined in the current scope
 			// We assume it's a global variable
 			return nil
 		}
-		if !defined {
+		if !metadata.initialized {
 			return NewResolveError(expr.Name, "Can't read local variable in its own initializer.")
 		}
+		metadata.used = true
 	}
 
 	return r.resolveLocal(expr, expr.Name)
