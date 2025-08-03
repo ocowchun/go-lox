@@ -1,4 +1,5 @@
 var a = "global";
+var a = "global-2";
 {
   var showA = fun() {
     print a;
@@ -6,6 +7,9 @@ var a = "global";
 
   showA();
   var a = "block";
+  // var a = "block-2";
   print a;
   showA();
 }
+
+return "at top level";

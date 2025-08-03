@@ -40,7 +40,11 @@ func runFile(target string) {
 
 	if err != nil {
 		var runtimeError *interpreter.RuntimeError
-		if errors.As(err, &runtimeError) {
+		var resolverError *interpreter.ResolveError
+
+		if errors.As(err, &resolverError) {
+			fmt.Printf("%s\n[line %d]\n", resolverError.Message, resolverError.Token.Line)
+		} else if errors.As(err, &runtimeError) {
 			fmt.Printf("%s\n[line %d]\n", runtimeError.Message, runtimeError.Token.Line)
 			os.Exit(70)
 		} else {
@@ -48,7 +52,6 @@ func runFile(target string) {
 			os.Exit(65)
 		}
 	}
-	// fmt.Println("Running file:", target)
 }
 
 func runPrompt() {
@@ -67,7 +70,10 @@ func runPrompt() {
 		err := run(strings.NewReader(line))
 		if err != nil {
 			var runtimeError *interpreter.RuntimeError
-			if errors.As(err, &runtimeError) {
+			var resolverError *interpreter.ResolveError
+			if errors.As(err, &resolverError) {
+				fmt.Printf("%s\n[line %d]\n", resolverError.Message, resolverError.Token.Line)
+			} else if errors.As(err, &runtimeError) {
 				fmt.Printf("%s\n[line %d]\n", runtimeError.Message, runtimeError.Token.Line)
 			} else {
 				fmt.Println(err)
@@ -102,7 +108,7 @@ func run(r io.Reader) error {
 	for _, stmt := range statements {
 		err = resolver.ResolveStatement(stmt)
 		if err != nil {
-			return fmt.Errorf("resolver error: %s", err)
+			return err
 		}
 	}
 

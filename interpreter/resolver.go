@@ -1,19 +1,29 @@
 package interpreter
 
 import (
+	"fmt"
 	"github.com/ocowchun/go-lox/ast"
 	"github.com/ocowchun/go-lox/token"
 )
 
+type FunctionType uint8
+
+const (
+	FunctionTypeNone FunctionType = iota
+	FunctionTypeFunction
+)
+
 type Resolver struct {
-	interpreter *Interpreter
-	scopes      []map[string]bool
+	interpreter         *Interpreter
+	scopes              []map[string]bool
+	currentFunctionType FunctionType
 }
 
 func NewResolver(interpreter *Interpreter) *Resolver {
 	return &Resolver{
-		interpreter: interpreter,
-		scopes:      []map[string]bool{},
+		interpreter:         interpreter,
+		scopes:              []map[string]bool{},
+		currentFunctionType: FunctionTypeNone,
 	}
 }
 
@@ -51,6 +61,9 @@ func (r *Resolver) declare(name token.Token) error {
 	}
 
 	scope := r.scopes[len(r.scopes)-1]
+	if _, exists := scope[name.Lexeme]; exists {
+		return NewResolveError(name, fmt.Sprintf("Already a variable with this name `%s` in this scope.", name.Lexeme))
+	}
 	scope[name.Lexeme] = false // Mark as declared but not initialized
 
 	return nil
@@ -60,7 +73,7 @@ func (r *Resolver) define(name token.Token) error {
 	if len(r.scopes) == 0 {
 		return nil
 	}
-	
+
 	scope := r.scopes[len(r.scopes)-1]
 	scope[name.Lexeme] = true
 
@@ -149,12 +162,18 @@ func (r *Resolver) VisitFunctionStatement(stmt *ast.FunctionStatement) any {
 		return err
 	}
 
-	return r.resolveFunction(stmt.Parameters, stmt.Body)
+	return r.resolveFunction(stmt.Parameters, stmt.Body, FunctionTypeFunction)
 }
 
-func (r *Resolver) resolveFunction(parameters []token.Token, body *ast.BlockStatement) error {
+func (r *Resolver) resolveFunction(parameters []token.Token, body *ast.BlockStatement, functionType FunctionType) error {
+	enclosingFunctionType := r.currentFunctionType
+	r.currentFunctionType = functionType
+
 	r.beginScope()
-	defer r.endScope()
+	defer func() {
+		r.currentFunctionType = enclosingFunctionType
+		r.endScope()
+	}()
 
 	for _, param := range parameters {
 		err := r.declare(param)
@@ -171,6 +190,10 @@ func (r *Resolver) resolveFunction(parameters []token.Token, body *ast.BlockStat
 }
 
 func (r *Resolver) VisitReturnStatement(stmt *ast.ReturnStatement) any {
+	if r.currentFunctionType == FunctionTypeNone {
+		return NewResolveError(stmt.Keyword, "Can't return from top-level code.")
+	}
+	
 	if stmt.Value != nil {
 		return r.ResolveExpression(stmt.Value)
 	}
@@ -292,5 +315,5 @@ func (r *Resolver) VisitCallExpression(expr *ast.CallExpression) any {
 }
 
 func (r *Resolver) VisitFunctionExpression(expr *ast.FunctionExpression) any {
-	return r.resolveFunction(expr.Parameters, expr.Body)
+	return r.resolveFunction(expr.Parameters, expr.Body, FunctionTypeFunction)
 }
