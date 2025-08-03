@@ -39,21 +39,22 @@ func (p *Parser) ParseDeclaration() (ast.Stmt, error) {
 	if p.currentTokenIs(token.TokenTypeVar) {
 		return p.parseVarDeclaration()
 	} else if p.currentTokenIs(token.TokenTypeFun) {
-		if !p.currentTokenIs(token.TokenTypeFun) {
-			return nil, fmt.Errorf("expected `fun` but got token %s", p.currentToken().Type)
-		} else {
+		if p.nextTokenIs(token.TokenTypeIdentifier) {
 			_, err := p.advance()
 			if err != nil {
 				return nil, err
 			}
+			return p.parseFunctionStatement("function")
+		} else {
+			// handle anonymous function case like: fun () {};
+			return p.ParseStatement()
 		}
-		return p.parseFunction("function")
 	}
 
 	return p.ParseStatement()
 }
 
-func (p *Parser) parseFunction(kind string) (ast.Stmt, error) {
+func (p *Parser) parseFunctionStatement(kind string) (ast.Stmt, error) {
 	name, err := p.consume(token.TokenTypeIdentifier, fmt.Sprintf("expected %s name", kind))
 	if err != nil {
 		return nil, err
@@ -63,7 +64,25 @@ func (p *Parser) parseFunction(kind string) (ast.Stmt, error) {
 	if err != nil {
 		return nil, err
 	}
+	parameters, err := p.parseParameters(kind)
+	if err != nil {
+		return nil, err
+	}
+	_, err = p.consume(token.TokenTypeRightParen, fmt.Sprintf("expected `)` after %s parameters", kind))
 
+	body, err := p.parseBlockStatement()
+	if err != nil {
+		return nil, err
+	}
+
+	return &ast.FunctionStatement{
+		Name:       name,
+		Parameters: parameters,
+		Body:       body,
+	}, nil
+}
+
+func (p *Parser) parseParameters(kind string) ([]token.Token, error) {
 	parameters := make([]token.Token, 0)
 	for !p.currentTokenIs(token.TokenTypeRightParen) {
 		parameter, err := p.consume(token.TokenTypeIdentifier, fmt.Sprintf("expected parameter name for %s", kind))
@@ -86,18 +105,7 @@ func (p *Parser) parseFunction(kind string) (ast.Stmt, error) {
 		}
 	}
 
-	_, err = p.consume(token.TokenTypeRightParen, fmt.Sprintf("expected `)` after %s parameters", kind))
-
-	body, err := p.parseBlockStatement()
-	if err != nil {
-		return nil, err
-	}
-
-	return &ast.FunctionStatement{
-		Name:       name,
-		Parameters: parameters,
-		Body:       body,
-	}, nil
+	return parameters, nil
 }
 
 func (p *Parser) parseVarDeclaration() (ast.Stmt, error) {
@@ -643,6 +651,14 @@ func (p *Parser) currentTokenIs(tokenTypes ...token.TokenType) bool {
 	return slices.Contains(tokenTypes, p.currentToken().Type)
 }
 
+func (p *Parser) nextTokenIs(tokenTypes ...token.TokenType) bool {
+	if p.current+1 >= len(p.tokens) {
+		return false
+	}
+
+	return slices.Contains(tokenTypes, p.tokens[p.current+1].Type)
+}
+
 func (p *Parser) advance() (token.Token, error) {
 	if p.current >= len(p.tokens) {
 		return token.Token{}, errors.New("unexpected end of input")
@@ -885,6 +901,10 @@ func (p *Parser) parsePrimary() (ast.Expr, error) {
 		}
 	}
 
+	if p.currentTokenIs(token.TokenTypeFun) {
+		return p.parseFunctionExpression()
+	}
+
 	if p.currentTokenIs(token.TokenTypeIdentifier) {
 		name, err := p.advance()
 		if err != nil {
@@ -895,4 +915,34 @@ func (p *Parser) parsePrimary() (ast.Expr, error) {
 		}, nil
 	}
 	return nil, fmt.Errorf("expected expression got %s", p.currentToken().Type)
+}
+
+// parse anonymous function like fun (a) { print a; }
+func (p *Parser) parseFunctionExpression() (ast.Expr, error) {
+	fun, err := p.consume(token.TokenTypeFun, "expect `fun`")
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = p.consume(token.TokenTypeLeftParen, "expect `(` after fun")
+	if err != nil {
+		return nil, err
+	}
+
+	parameters, err := p.parseParameters("function")
+	if err != nil {
+		return nil, err
+	}
+	_, err = p.consume(token.TokenTypeRightParen, fmt.Sprintf("expected `)` after function parameters"))
+
+	body, err := p.parseBlockStatement()
+	if err != nil {
+		return nil, err
+	}
+
+	return &ast.FunctionExpression{
+		Fun:        fun,
+		Parameters: parameters,
+		Body:       body,
+	}, nil
 }

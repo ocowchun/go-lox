@@ -1,10 +1,6 @@
 package ast
 
 import (
-	"fmt"
-	"strconv"
-	"strings"
-
 	"github.com/ocowchun/go-lox/token"
 )
 
@@ -126,6 +122,18 @@ func (exp *CallExpression) Accept(visitor ExprVisitor) any {
 	return visitor.VisitCallExpression(exp)
 }
 
+type FunctionExpression struct {
+	Fun        token.Token // keep the keyword for error reporting
+	Parameters []token.Token
+	Body       *BlockStatement
+}
+
+func (exp *FunctionExpression) Expr() {}
+
+func (exp *FunctionExpression) Accept(visitor ExprVisitor) any {
+	return visitor.VisitFunctionExpression(exp)
+}
+
 type ExprVisitor interface {
 	VisitBinaryExpression(expr *BinaryExpression) any
 	VisitGroupingExpression(expr *GroupingExpression) any
@@ -137,88 +145,5 @@ type ExprVisitor interface {
 	VisitAssignExpression(expr *AssignExpression) any
 	VisitLogicalExpression(expr *LogicalExpression) any
 	VisitCallExpression(expr *CallExpression) any
-}
-
-type ExpressionPrinter struct {
-}
-
-func (printer *ExpressionPrinter) Print(expr Expr) string {
-	res := expr.Accept(printer).(string)
-
-	return res
-}
-
-func (printer *ExpressionPrinter) VisitBinaryExpression(expr *BinaryExpression) any {
-	return fmt.Sprintf("(%s %s %s)", expr.Operator.Lexeme, printer.Print(expr.Left), printer.Print(expr.Right))
-
-}
-
-func (printer *ExpressionPrinter) VisitGroupingExpression(expr *GroupingExpression) any {
-	return fmt.Sprintf("(group %s)", printer.Print(expr.Expression))
-}
-
-func (printer *ExpressionPrinter) VisitLiteralExpression(expr *LiteralExpression) any {
-	if str, ok := expr.Value.(string); ok {
-		return str
-	} else if num, ok := expr.Value.(float64); ok {
-		return strconv.FormatFloat(num, 'f', -1, 64)
-	} else {
-		return fmt.Sprintf("%v", expr.Value)
-	}
-}
-
-func (printer *ExpressionPrinter) VisitUnaryExpression(expr *UnaryExpression) any {
-	return fmt.Sprintf("(%s %s)", expr.Operator.Lexeme, printer.Print(expr.Right))
-}
-
-func (printer *ExpressionPrinter) VisitCommaExpression(expr *CommaExpression) any {
-	var b strings.Builder
-
-	b.WriteString("(begin")
-	for _, e := range expr.Expressions {
-		b.WriteString(" ")
-		b.WriteString(printer.Print(e))
-	}
-	b.WriteString(")")
-
-	return b.String()
-}
-
-func (printer *ExpressionPrinter) VisitConditionExpression(expr *ConditionExpression) any {
-	var b strings.Builder
-
-	b.WriteString("(if ")
-	b.WriteString(printer.Print(expr.Predicate))
-	b.WriteString(" ")
-	b.WriteString(printer.Print(expr.Consequent))
-	b.WriteString(" ")
-	b.WriteString(printer.Print(expr.Alternative))
-	b.WriteString(")")
-
-	return b.String()
-}
-
-func (printer *ExpressionPrinter) VisitVariableExpression(expr *VariableExpression) any {
-	return expr.Name.Lexeme
-}
-
-func (printer *ExpressionPrinter) VisitAssignExpression(expr *AssignExpression) any {
-	return fmt.Sprintf("(set! %s %s)", expr.Name.Lexeme, printer.Print(expr.Value))
-}
-
-func (printer *ExpressionPrinter) VisitLogicalExpression(expr *LogicalExpression) any {
-	return fmt.Sprintf("(%s %s %s)", expr.Operator.Lexeme, printer.Print(expr.Left), printer.Print(expr.Right))
-}
-
-func (printer *ExpressionPrinter) VisitCallExpression(expr *CallExpression) any {
-	var b strings.Builder
-	b.WriteString("(")
-	b.WriteString(printer.Print(expr.Callee))
-
-	for _, arg := range expr.Arguments {
-		b.WriteString(" ")
-		b.WriteString(printer.Print(arg))
-	}
-	b.WriteString(")")
-	return b.String()
+	VisitFunctionExpression(expr *FunctionExpression) any
 }

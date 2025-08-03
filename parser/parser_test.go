@@ -37,16 +37,16 @@ func TestParser_Parse(t *testing.T) {
 			}
 			p := NewParser(tokens)
 
-			expr, err := p.Parse()
+			statements, err := p.Parse()
 			if err != nil {
 				t.Fatalf("Failed to parse %s, error: %v", testCase.input, err)
 			}
 
-			printer := ast.NewStatementPrinter()
-			if len(expr) != 1 {
-				t.Fatalf("Expected 1 statement, got %d", len(expr))
+			if len(statements) != 1 {
+				t.Fatalf("Expected 1 statement, got %d", len(statements))
 			}
-			actual := printer.Print(expr[0])
+			printer := ast.Printer{}
+			actual := printer.PrintStatement(statements[0])
 			if actual != testCase.expected {
 				t.Errorf("Expected %s, got %s", testCase.expected, actual)
 			}
@@ -86,6 +86,7 @@ func TestParser_parseExpression(t *testing.T) {
 		{"call expression 0", "foo()", "(foo)"},
 		{"call expression 1", "foo(1)", "(foo 1)"},
 		{"call expression 2", "foo(1, 2)", "(foo 1 2)"},
+		{"function expression", "fun (a) { print a; }", "(lambda (a) (begin\n(print a)\n))"},
 	}
 
 	for _, testCase := range testCases {
@@ -103,8 +104,8 @@ func TestParser_parseExpression(t *testing.T) {
 				t.Fatalf("Failed to parse %s, error: %v", testCase.input, err)
 			}
 
-			printer := ast.ExpressionPrinter{}
-			actual := printer.Print(expr)
+			printer := ast.Printer{}
+			actual := printer.PrintExpression(expr)
 			if actual != testCase.expected {
 				t.Errorf("Expected %s, got %s", testCase.expected, actual)
 			}

@@ -18,9 +18,9 @@ func TestBinaryExpression(t *testing.T) {
 		Operator: token.Token{Type: token.TokenTypePlus, Lexeme: "+"},
 		Right:    &lit2,
 	}
-	printer := ExpressionPrinter{}
+	printer := Printer{}
 
-	result := printer.Print(&exp)
+	result := printer.PrintExpression(&exp)
 
 	if result != "(+ hello world)" {
 		t.Fatalf("Expected '(+ hello world)', got %v", result)
@@ -33,9 +33,9 @@ func TestGroupedExpression(t *testing.T) {
 			Value: "hello world",
 		},
 	}
-	printer := ExpressionPrinter{}
+	printer := Printer{}
 
-	result := printer.Print(&exp)
+	result := printer.PrintExpression(&exp)
 
 	if result != "(group hello world)" {
 		t.Fatalf("Expected '(group hello world)', got %v", result)
@@ -47,9 +47,9 @@ func TestLiteralExpression(t *testing.T) {
 	exp := LiteralExpression{
 		Value: "hello world",
 	}
-	printer := ExpressionPrinter{}
+	printer := Printer{}
 
-	result := printer.Print(&exp)
+	result := printer.PrintExpression(&exp)
 
 	if result != "hello world" {
 		t.Fatalf("Expected 'hello world', got %v", result)
@@ -61,9 +61,9 @@ func TestUnaryExpression(t *testing.T) {
 		Operator: token.Token{Type: token.TokenTypeMinus, Lexeme: "-"},
 		Right:    &LiteralExpression{Value: 123},
 	}
-	printer := ExpressionPrinter{}
+	printer := Printer{}
 
-	result := printer.Print(&exp)
+	result := printer.PrintExpression(&exp)
 
 	if result != "(- 123)" {
 		t.Fatalf("Expected '(- 123)', got %v", result)

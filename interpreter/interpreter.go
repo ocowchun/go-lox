@@ -186,7 +186,6 @@ func (f *Function) Call(interpreter *Interpreter, args []any) EvaluatedResult {
 		environment.Define(param.Lexeme, args[i])
 	}
 
-	// TODO: handle return value
 	res := interpreter.executeBlockStatement(f.declaration.Body, environment)
 	if res.Error != nil {
 		return EvaluatedResult{Error: res.Error}
@@ -210,8 +209,8 @@ func (f *Function) Arity() int {
 }
 
 func (f *Function) String() string {
-	printer := ast.NewStatementPrinter()
-	return printer.Print(f.declaration)
+	printer := ast.NewPrinter()
+	return printer.PrintStatement(f.declaration)
 }
 
 func (interpreter *Interpreter) VisitFunctionStatement(stmt *ast.FunctionStatement) any {
@@ -579,6 +578,71 @@ func (interpreter *Interpreter) VisitCallExpression(expr *ast.CallExpression) an
 	}
 
 	return function.Call(interpreter, args)
+}
+
+// Create an AnonymousFunction in case later chapters want to make some adjustments in the Function type
+// We can consider merge this with Function type later
+type AnonymousFunction struct {
+	expression *ast.FunctionExpression
+	closure    *Environment // The environment in which the function was defined
+}
+
+func NewAnonymousFunction(expression *ast.FunctionExpression, closure *Environment) *AnonymousFunction {
+	return &AnonymousFunction{
+		expression: expression,
+		closure:    closure,
+	}
+}
+
+func (f *AnonymousFunction) Call(interpreter *Interpreter, args []any) EvaluatedResult {
+	environment := NewEnvironment(f.closure)
+
+	if len(args) != f.Arity() {
+		return EvaluatedResult{
+			Error: NewRuntimeError(
+				f.expression.Fun,
+				fmt.Sprintf("expected %d arguments but got %d", f.Arity(), len(args)),
+			),
+		}
+	}
+
+	for i, param := range f.expression.Parameters {
+		environment.Define(param.Lexeme, args[i])
+	}
+
+	res := interpreter.executeBlockStatement(f.expression.Body, environment)
+	if res.Error != nil {
+		return EvaluatedResult{Error: res.Error}
+	}
+
+	if returnValue, ok := res.Value.(ReturnValue); ok {
+		return EvaluatedResult{
+			Value: returnValue.Value,
+		}
+
+	} else {
+		// If no return value is specified, return nil
+		return EvaluatedResult{
+			Value: nil,
+		}
+	}
+}
+
+func (f *AnonymousFunction) Arity() int {
+	return len(f.expression.Parameters)
+}
+
+func (f *AnonymousFunction) String() string {
+	printer := ast.NewPrinter()
+	return printer.PrintExpression(f.expression)
+}
+
+func (interpreter *Interpreter) VisitFunctionExpression(expr *ast.FunctionExpression) any {
+	fun := NewAnonymousFunction(expr, interpreter.environment)
+
+	return EvaluatedResult{
+		Value: fun,
+	}
 }
 
 type Callable interface {
