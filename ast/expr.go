@@ -137,6 +137,28 @@ func (exp *FunctionExpression) Accept(visitor ExprVisitor) any {
 	return visitor.VisitFunctionExpression(exp)
 }
 
+type GetExpression struct {
+	Object Expr
+	Name   token.Token
+}
+
+func (exp *GetExpression) Expr() {}
+
+func (exp *GetExpression) Accept(visitor ExprVisitor) any {
+	return visitor.VisitGetExpression(exp)
+}
+
+type SetExpression struct {
+	Object Expr
+	Name   token.Token
+	Value  Expr
+}
+
+func (exp *SetExpression) Expr() {}
+func (exp *SetExpression) Accept(visitor ExprVisitor) any {
+	return visitor.VisitSetExpression(exp)
+}
+
 type ExprVisitor interface {
 	VisitBinaryExpression(expr *BinaryExpression) any
 	VisitGroupingExpression(expr *GroupingExpression) any
@@ -149,4 +171,6 @@ type ExprVisitor interface {
 	VisitLogicalExpression(expr *LogicalExpression) any
 	VisitCallExpression(expr *CallExpression) any
 	VisitFunctionExpression(expr *FunctionExpression) any
+	VisitGetExpression(expr *GetExpression) any
+	VisitSetExpression(expr *SetExpression) any
 }

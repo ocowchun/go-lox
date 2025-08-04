@@ -228,6 +228,22 @@ func (r *Resolver) VisitReturnStatement(stmt *ast.ReturnStatement) any {
 	return nil
 }
 
+func (r *Resolver) VisitClassStatement(stmt *ast.ClassStatement) any {
+	err := r.declare(stmt.Name)
+	if err != nil {
+		return err
+	}
+	err = r.define(stmt.Name)
+	if err != nil {
+		return err
+	}
+
+	// TODO: resolve methods
+
+	return nil
+
+}
+
 // Expression
 
 func (r *Resolver) VisitBinaryExpression(expr *ast.BinaryExpression) any {
@@ -344,4 +360,17 @@ func (r *Resolver) VisitCallExpression(expr *ast.CallExpression) any {
 
 func (r *Resolver) VisitFunctionExpression(expr *ast.FunctionExpression) any {
 	return r.resolveFunction(expr.Parameters, expr.Body, FunctionTypeFunction)
+}
+
+func (r Resolver) VisitGetExpression(expr *ast.GetExpression) any {
+	return r.ResolveExpression(expr.Object)
+}
+
+func (r Resolver) VisitSetExpression(expr *ast.SetExpression) any {
+	err := r.ResolveExpression(expr.Object)
+	if err != nil {
+		return err
+	}
+
+	return r.ResolveExpression(expr.Value)
 }

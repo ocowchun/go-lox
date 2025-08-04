@@ -1,21 +1,4 @@
-var a = "global";
-var a = "global-2";
-fun foo(boo) {
-  var showA = fun() {
-    print a;
-  };
-
-  // var boo = 123;
-
-  // var neverUsed = "can you find me";
-
-  showA();
-  var a = "block";
-  // var a = "block-2";
-  print a;
-  showA();
-}
-
-foo(123);
-
-// return "at top level";
+class Bagel {}
+var bagel = Bagel();
+bagel.flavor = "blueberry";
+print bagel.flavor;

@@ -25,6 +25,7 @@ func TestParser_Parse(t *testing.T) {
 		{"for statement", "for (var i = 0; i < 5; i = i + 1) { print i;}", "(begin\n(define i 0)\n(while (< i 5) (begin\n(begin\n(print i)\n)\n(set! i (+ i 1))\n))\n)"},
 		{"function statement", "fun foo(a, b) { print a + b; }", "(define (foo a b)\n(print (+ a b))\n)"},
 		{"return statement", "return 1 + 2;", "(return (+ 1 2))"},
+		{"class statement", "class Foo { bar() { print 123; } }", "(class Foo\n(define (bar)\n(print 123)\n)\n)"},
 	}
 
 	for _, testCase := range testCases {
@@ -88,6 +89,7 @@ func TestParser_parseExpression(t *testing.T) {
 		{"call expression 1", "foo(1)", "(foo 1)"},
 		{"call expression 2", "foo(1, 2)", "(foo 1 2)"},
 		{"function expression", "fun (a) { print a; }", "(lambda (a) (begin\n(print a)\n))"},
+		{"get expression", "a.b", "(get a b)"},
 	}
 
 	for _, testCase := range testCases {

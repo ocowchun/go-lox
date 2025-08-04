@@ -91,6 +91,20 @@ func (printer *Printer) VisitReturnStatement(stmt *ReturnStatement) any {
 	return fmt.Sprintf("(return %s)", stmt.Value.Accept(printer))
 }
 
+func (printer *Printer) VisitClassStatement(stmt *ClassStatement) any {
+	// it's verbose to print class statements in a way that is similar to the Scheme syntax,
+	var b strings.Builder
+	b.WriteString("(class ")
+	b.WriteString(stmt.Name.Lexeme)
+	b.WriteString("\n")
+	for _, method := range stmt.Methods {
+		b.WriteString(printer.PrintStatement(method))
+		b.WriteString("\n")
+	}
+	b.WriteString(")")
+	return b.String()
+}
+
 // Expression
 
 func (printer *Printer) PrintExpression(expr Expr) string {
@@ -196,4 +210,16 @@ func (printer *Printer) VisitFunctionExpression(expr *FunctionExpression) any {
 	b.WriteString(printer.PrintStatement(expr.Body))
 	b.WriteString(")")
 	return b.String()
+}
+
+func (printer *Printer) VisitGetExpression(expr *GetExpression) any {
+	return fmt.Sprintf("(get %s %s)", printer.PrintExpression(expr.Object), expr.Name.Lexeme)
+}
+
+func (printer *Printer) VisitSetExpression(expr *SetExpression) any {
+	return fmt.Sprintf("(set! %s %s %s)",
+		printer.PrintExpression(expr.Object),
+		expr.Name.Lexeme,
+		printer.PrintExpression(expr.Value),
+	)
 }

@@ -18,6 +18,7 @@ type StmtVisitor interface {
 	VisitWhileStatement(stmt *WhileStatement) any
 	VisitFunctionStatement(stmt *FunctionStatement) any
 	VisitReturnStatement(stmt *ReturnStatement) any
+	VisitClassStatement(stmt *ClassStatement) any
 }
 
 type ExpressionStatement struct {
@@ -106,4 +107,15 @@ func (stmt *ReturnStatement) Stmt() {}
 
 func (stmt *ReturnStatement) Accept(visitor StmtVisitor) any {
 	return visitor.VisitReturnStatement(stmt)
+}
+
+type ClassStatement struct {
+	Name    token.Token
+	Methods []*FunctionStatement
+}
+
+func (stmt *ClassStatement) Stmt() {}
+
+func (stmt *ClassStatement) Accept(visitor StmtVisitor) any {
+	return visitor.VisitClassStatement(stmt)
 }

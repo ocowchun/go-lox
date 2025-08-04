@@ -174,6 +174,67 @@ func (interpreter *Interpreter) executeBlockStatement(stmt *ast.BlockStatement, 
 	return StatementResult{}
 }
 
+type Class struct {
+	name string
+}
+
+func (c *Class) String() string {
+	return c.name
+}
+
+func (c *Class) Call(interpreter *Interpreter, args []any) EvaluatedResult {
+	instance := NewInstance(c)
+	return EvaluatedResult{
+		Value: instance,
+	}
+}
+
+func (c *Class) Arity() int {
+	return 0
+}
+
+type Instance struct {
+	class  *Class
+	fields map[string]any
+}
+
+func NewClass(name string) *Class {
+	return &Class{name: name}
+}
+
+func NewInstance(class *Class) *Instance {
+	return &Instance{
+		class:  class,
+		fields: make(map[string]any),
+	}
+}
+
+func (i *Instance) String() string {
+	return fmt.Sprintf("%s instance", i.class.name)
+}
+
+func (i *Instance) Get(name token.Token) (any, error) {
+	if value, exists := i.fields[name.Lexeme]; exists {
+		return value, nil
+	}
+
+	return nil, fmt.Errorf("undefined property '%s' in instance of class '%s'", name.Lexeme, i.class.name)
+}
+
+func (i *Instance) Set(name token.Token, value any) {
+	i.fields[name.Lexeme] = value
+}
+
+func (interpreter *Interpreter) VisitClassStatement(stmt *ast.ClassStatement) any {
+	interpreter.environment.Define(stmt.Name.Lexeme, nil)
+	class := NewClass(stmt.Name.Lexeme)
+	err := interpreter.environment.Assign(stmt.Name, class)
+	if err != nil {
+		return StatementResult{Error: err}
+	}
+	return StatementResult{}
+}
+
 type Function struct {
 	declaration *ast.FunctionStatement
 	closure     *Environment // The environment in which the function was defined
@@ -659,4 +720,45 @@ func (interpreter *Interpreter) VisitFunctionExpression(expr *ast.FunctionExpres
 type Callable interface {
 	Call(interpreter *Interpreter, args []any) EvaluatedResult
 	Arity() int
+}
+
+func (interpreter *Interpreter) VisitGetExpression(expr *ast.GetExpression) any {
+	object := interpreter.Evaluate(expr.Object)
+	instance, ok := object.Value.(*Instance)
+	if !ok {
+		err := NewRuntimeError(
+			expr.Name,
+			fmt.Sprintf("only instances have properties, got %T", object.Value),
+		)
+		return EvaluatedResult{Error: err}
+	}
+
+	val, err := instance.Get(expr.Name)
+	if err != nil {
+		return EvaluatedResult{Error: NewRuntimeError(expr.Name, err.Error())}
+	}
+
+	return EvaluatedResult{
+		Value: val,
+	}
+}
+
+func (interpreter *Interpreter) VisitSetExpression(expr *ast.SetExpression) any {
+	object := interpreter.Evaluate(expr.Object)
+	instance, ok := object.Value.(*Instance)
+	if !ok {
+		err := NewRuntimeError(
+			expr.Name,
+			fmt.Sprintf("only instances have properties, got %T", object.Value),
+		)
+		return EvaluatedResult{Error: err}
+	}
+
+	evaluatedRes := interpreter.Evaluate(expr.Value)
+	if evaluatedRes.Error != nil {
+		return evaluatedRes
+	}
+
+	instance.Set(expr.Name, evaluatedRes.Value)
+	return evaluatedRes
 }

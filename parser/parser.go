@@ -49,12 +49,43 @@ func (p *Parser) ParseDeclaration() (ast.Stmt, error) {
 			// handle anonymous function case like: fun () {};
 			return p.ParseStatement()
 		}
+	} else if p.currentTokenIs(token.TokenTypeClass) {
+		return p.parseClassDeclaration()
 	}
 
 	return p.ParseStatement()
 }
 
-func (p *Parser) parseFunctionStatement(kind string) (ast.Stmt, error) {
+func (p *Parser) parseClassDeclaration() (*ast.ClassStatement, error) {
+	_, err := p.consume(token.TokenTypeClass, fmt.Sprintf("expected `class`"))
+	if err != nil {
+		return nil, err
+	}
+
+	name, err := p.consume(token.TokenTypeIdentifier, "expected class name")
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = p.consume(token.TokenTypeLeftBrace, "expected `{` after class name")
+	methods := make([]*ast.FunctionStatement, 0)
+	for !p.currentTokenIs(token.TokenTypeRightBrace) {
+		method, err := p.parseFunctionStatement("method")
+		if err != nil {
+			return nil, err
+		}
+		methods = append(methods, method)
+	}
+
+	_, err = p.consume(token.TokenTypeRightBrace, "expected `}` after class body")
+
+	return &ast.ClassStatement{
+		Name:    name,
+		Methods: methods,
+	}, nil
+}
+
+func (p *Parser) parseFunctionStatement(kind string) (*ast.FunctionStatement, error) {
 	name, err := p.consume(token.TokenTypeIdentifier, fmt.Sprintf("expected %s name", kind))
 	if err != nil {
 		return nil, err
@@ -502,6 +533,13 @@ func (p *Parser) parseAssignment() (ast.Expr, error) {
 				Name:  variableExpr.Name,
 				Value: val,
 			}, nil
+		} else if getExpr, ok := expr.(*ast.GetExpression); ok {
+			// smart!!!
+			return &ast.SetExpression{
+				Object: getExpr.Object,
+				Name:   getExpr.Name,
+				Value:  val,
+			}, nil
 		} else {
 			return nil, fmt.Errorf("invalid assignment target %T", expr)
 
@@ -795,11 +833,27 @@ func (p *Parser) parseCall() (ast.Expr, error) {
 
 	for {
 		if p.currentTokenIs(token.TokenTypeLeftParen) {
-			_, err := p.advance()
+			// foo()
+			_, err = p.consume(token.TokenTypeLeftParen, "expect `(` after callee")
 			if err != nil {
 				return nil, err
 			}
 			callee, err = p.finishCall(callee)
+		} else if p.currentTokenIs(token.TokenTypeDot) {
+			//foo.bar
+			_, err = p.consume(token.TokenTypeDot, "expect `.` after callee")
+			if err != nil {
+				return nil, err
+			}
+
+			name, err := p.consume(token.TokenTypeIdentifier, "expect property name after `.`")
+			if err != nil {
+				return nil, err
+			}
+			callee = &ast.GetExpression{
+				Object: callee,
+				Name:   name,
+			}
 		} else {
 			break
 		}
