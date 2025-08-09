@@ -67,6 +67,22 @@ func (p *Parser) parseClassDeclaration() (*ast.ClassStatement, error) {
 		return nil, err
 	}
 
+	var superclass *ast.VariableExpression
+	if p.currentTokenIs(token.TokenTypeLess) {
+		_, err = p.consume(token.TokenTypeLess, "expected `<` after class name")
+		if err != nil {
+			return nil, err
+		}
+
+		superclassName, err := p.consume(token.TokenTypeIdentifier, "expected superclass name")
+		if err != nil {
+			return nil, err
+		}
+		superclass = &ast.VariableExpression{
+			Name: superclassName,
+		}
+	}
+
 	_, err = p.consume(token.TokenTypeLeftBrace, "expected `{` after class name")
 	methods := make([]*ast.FunctionStatement, 0)
 	for !p.currentTokenIs(token.TokenTypeRightBrace) {
@@ -80,8 +96,9 @@ func (p *Parser) parseClassDeclaration() (*ast.ClassStatement, error) {
 	_, err = p.consume(token.TokenTypeRightBrace, "expected `}` after class body")
 
 	return &ast.ClassStatement{
-		Name:    name,
-		Methods: methods,
+		Name:       name,
+		Superclass: superclass,
+		Methods:    methods,
 	}, nil
 }
 

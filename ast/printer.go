@@ -96,6 +96,10 @@ func (printer *Printer) VisitClassStatement(stmt *ClassStatement) any {
 	var b strings.Builder
 	b.WriteString("(class ")
 	b.WriteString(stmt.Name.Lexeme)
+	if stmt.Superclass != nil {
+		b.WriteString(" < ")
+		b.WriteString(stmt.Superclass.Name.Lexeme)
+	}
 	b.WriteString("\n")
 	for _, method := range stmt.Methods {
 		b.WriteString(printer.PrintStatement(method))

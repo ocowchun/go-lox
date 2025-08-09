@@ -110,8 +110,10 @@ func (stmt *ReturnStatement) Accept(visitor StmtVisitor) any {
 }
 
 type ClassStatement struct {
-	Name    token.Token
-	Methods []*FunctionStatement
+	Name token.Token
+	// nil if no superclass
+	Superclass *VariableExpression
+	Methods    []*FunctionStatement
 }
 
 func (stmt *ClassStatement) Stmt() {}

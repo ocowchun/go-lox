@@ -1,9 +1,10 @@
-class Foo {
-  init() {
-    print this;
-  }
+fun foo() {
+    var a = 123;
 
+    fun bar() {
+        print a;
+    }
+    bar();
 }
 
-var foo = Foo();
-print foo.init();
+foo();

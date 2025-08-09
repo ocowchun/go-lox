@@ -46,6 +46,16 @@ func NewResolver(interpreter *Interpreter) *Resolver {
 	}
 }
 
+func (r *Resolver) ResolveStatements(statements []ast.Stmt) error {
+	for _, stmt := range statements {
+		err := r.ResolveStatement(stmt)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (r *Resolver) ResolveStatement(statement ast.Stmt) error {
 	err := statement.Accept(r)
 	if err != nil {
@@ -153,7 +163,6 @@ func (r *Resolver) VisitBlockStatement(stmt *ast.BlockStatement) any {
 				return NewResolveError(token.Token{Lexeme: name}, fmt.Sprintf("Local variable `%s` is declared but never used.", name))
 			}
 		}
-
 	}
 
 	return nil
@@ -259,6 +268,17 @@ func (r *Resolver) VisitClassStatement(stmt *ast.ClassStatement) any {
 		return err
 	}
 
+	if stmt.Superclass != nil {
+		if stmt.Superclass.Name.Lexeme == stmt.Name.Lexeme {
+			return NewResolveError(stmt.Superclass.Name, "A class can't inherit from itself.")
+		}
+
+		err = r.ResolveExpression(stmt.Superclass)
+		if err != nil {
+			return err
+		}
+	}
+
 	r.beginScope()
 	defer r.endScope()
 	r.scopes[len(r.scopes)-1]["this"] = &NameMetadata{
@@ -335,8 +355,9 @@ func (e *ResolveError) Error() string {
 
 func (r *Resolver) resolveLocal(expr ast.Expr, name token.Token) error {
 	for i := len(r.scopes) - 1; i >= 0; i-- {
-		if _, ok := r.scopes[i][name.Lexeme]; ok {
+		if metadata, ok := r.scopes[i][name.Lexeme]; ok {
 			r.interpreter.resolve(expr, len(r.scopes)-1-i)
+			metadata.used = true // Mark as used
 			return nil
 		}
 	}

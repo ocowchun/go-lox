@@ -26,6 +26,7 @@ func TestParser_Parse(t *testing.T) {
 		{"function statement", "fun foo(a, b) { print a + b; }", "(define (foo a b)\n(print (+ a b))\n)"},
 		{"return statement", "return 1 + 2;", "(return (+ 1 2))"},
 		{"class statement", "class Foo { bar() { print 123; } }", "(class Foo\n(define (bar)\n(print 123)\n)\n)"},
+		{"class statement with super class", "class Foo < Bar { bar() { print 123; } }", "(class Foo < Bar\n(define (bar)\n(print 123)\n)\n)"},
 	}
 
 	for _, testCase := range testCases {
