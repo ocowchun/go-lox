@@ -21,6 +21,16 @@ func (e *Environment) Define(name string, value any) {
 	e.values[name] = value
 }
 
+func (e *Environment) Depth() int {
+	depth := 0
+	current := e
+	for current.enclosing != nil {
+		depth++
+		current = current.enclosing
+	}
+	return depth
+}
+
 func (e *Environment) Assign(name token.Token, value any) error {
 	if _, exists := e.values[name.Lexeme]; !exists {
 		if e.enclosing != nil {
@@ -47,16 +57,16 @@ func (e *Environment) Get(name token.Token) (any, error) {
 }
 
 func (e *Environment) GetAt(name token.Token, depth int) (any, error) {
-	if depth < 0 || depth >= len(e.values) {
-		panic(fmt.Sprintf("Invalid depth %d for environment with %d values", depth, len(e.values)))
+	if depth < 0 || depth > e.Depth() {
+		panic(fmt.Sprintf("Invalid depth %d for environment with %d values", depth, e.Depth()))
 	}
 
 	return e.ancestor(depth).Get(name)
 }
 
-func (e Environment) AssignAt(name token.Token, depth int, value any) error {
-	if depth < 0 || depth >= len(e.values) {
-		panic(fmt.Sprintf("Invalid depth %d for environment with %d values", depth, len(e.values)))
+func (e *Environment) AssignAt(name token.Token, depth int, value any) error {
+	if depth < 0 || depth > e.Depth() {
+		panic(fmt.Sprintf("Invalid depth %d for environment with %d values", depth, e.Depth()))
 	}
 
 	return e.ancestor(depth).Assign(name, value)

@@ -175,7 +175,15 @@ func (interpreter *Interpreter) executeBlockStatement(stmt *ast.BlockStatement, 
 }
 
 type Class struct {
-	name string
+	name    string
+	methods map[string]*Function
+}
+
+func NewClass(name string, methods map[string]*Function) *Class {
+	return &Class{
+		name:    name,
+		methods: methods,
+	}
 }
 
 func (c *Class) String() string {
@@ -184,22 +192,32 @@ func (c *Class) String() string {
 
 func (c *Class) Call(interpreter *Interpreter, args []any) EvaluatedResult {
 	instance := NewInstance(c)
+	initializer := c.FindMethod("init")
+	if initializer != nil {
+		initializer.Bind(instance).Call(interpreter, args)
+	}
+
 	return EvaluatedResult{
 		Value: instance,
 	}
 }
 
 func (c *Class) Arity() int {
+	initializer := c.FindMethod("init")
+	if initializer != nil {
+		return initializer.Arity()
+	}
+
 	return 0
+}
+
+func (c *Class) FindMethod(name string) *Function {
+	return c.methods[name]
 }
 
 type Instance struct {
 	class  *Class
 	fields map[string]any
-}
-
-func NewClass(name string) *Class {
-	return &Class{name: name}
 }
 
 func NewInstance(class *Class) *Instance {
@@ -218,6 +236,11 @@ func (i *Instance) Get(name token.Token) (any, error) {
 		return value, nil
 	}
 
+	method := i.class.FindMethod(name.Lexeme)
+	if method != nil {
+		return method.Bind(i), nil
+	}
+
 	return nil, fmt.Errorf("undefined property '%s' in instance of class '%s'", name.Lexeme, i.class.name)
 }
 
@@ -227,7 +250,14 @@ func (i *Instance) Set(name token.Token, value any) {
 
 func (interpreter *Interpreter) VisitClassStatement(stmt *ast.ClassStatement) any {
 	interpreter.environment.Define(stmt.Name.Lexeme, nil)
-	class := NewClass(stmt.Name.Lexeme)
+
+	methods := make(map[string]*Function)
+	for _, methodStmt := range stmt.Methods {
+		method := NewFunction(methodStmt, interpreter.environment, methodStmt.Name.Lexeme == "init")
+		methods[methodStmt.Name.Lexeme] = method
+	}
+
+	class := NewClass(stmt.Name.Lexeme, methods)
 	err := interpreter.environment.Assign(stmt.Name, class)
 	if err != nil {
 		return StatementResult{Error: err}
@@ -236,14 +266,16 @@ func (interpreter *Interpreter) VisitClassStatement(stmt *ast.ClassStatement) an
 }
 
 type Function struct {
-	declaration *ast.FunctionStatement
-	closure     *Environment // The environment in which the function was defined
+	declaration   *ast.FunctionStatement
+	closure       *Environment // The environment in which the function was defined
+	isInitializer bool
 }
 
-func NewFunction(declaration *ast.FunctionStatement, closure *Environment) *Function {
+func NewFunction(declaration *ast.FunctionStatement, closure *Environment, isInitializer bool) *Function {
 	return &Function{
-		declaration: declaration,
-		closure:     closure,
+		declaration:   declaration,
+		closure:       closure,
+		isInitializer: isInitializer,
 	}
 }
 
@@ -263,9 +295,20 @@ func (f *Function) Call(interpreter *Interpreter, args []any) EvaluatedResult {
 		environment.Define(param.Lexeme, args[i])
 	}
 
+	// because function body is BlockStatement, we need to create a new environment
+	environment = NewEnvironment(environment)
 	res := interpreter.executeBlockStatement(f.declaration.Body, environment)
 	if res.Error != nil {
 		return EvaluatedResult{Error: res.Error}
+	}
+
+	if f.isInitializer {
+		// If this is an initializer, return the instance itself
+		val, err := f.closure.GetAt(token.Token{Lexeme: "this"}, 0)
+		return EvaluatedResult{
+			Value: val,
+			Error: err,
+		}
 	}
 
 	if returnValue, ok := res.Value.(ReturnValue); ok {
@@ -290,8 +333,15 @@ func (f *Function) String() string {
 	return printer.PrintStatement(f.declaration)
 }
 
+func (f *Function) Bind(instance *Instance) *Function {
+	environment := NewEnvironment(f.closure)
+	environment.Define("this", instance)
+
+	return NewFunction(f.declaration, environment, f.isInitializer)
+}
+
 func (interpreter *Interpreter) VisitFunctionStatement(stmt *ast.FunctionStatement) any {
-	function := NewFunction(stmt, interpreter.environment)
+	function := NewFunction(stmt, interpreter.environment, false)
 	interpreter.environment.Define(stmt.Name.Lexeme, function)
 
 	return StatementResult{
@@ -761,4 +811,16 @@ func (interpreter *Interpreter) VisitSetExpression(expr *ast.SetExpression) any 
 
 	instance.Set(expr.Name, evaluatedRes.Value)
 	return evaluatedRes
+}
+
+func (interpreter *Interpreter) VisitThisExpression(expr *ast.ThisExpression) any {
+	val, err := interpreter.lookupVariable(expr.Keyword, expr)
+
+	if err != nil {
+		return EvaluatedResult{Error: NewRuntimeError(expr.Keyword, err.Error())}
+	}
+
+	return EvaluatedResult{
+		Value: val,
+	}
 }

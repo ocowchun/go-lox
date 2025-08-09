@@ -921,6 +921,16 @@ func (p *Parser) parsePrimary() (ast.Expr, error) {
 		return &ast.LiteralExpression{Value: nil}, nil
 	}
 
+	if p.currentTokenIs(token.TokenTypeThis) {
+		t, err := p.consume(token.TokenTypeThis, "expect this expression")
+		if err != nil {
+			return nil, err
+		}
+		return &ast.ThisExpression{
+			Keyword: t,
+		}, nil
+	}
+
 	if p.currentTokenIs(token.TokenTypeNumber, token.TokenTypeString) {
 		t, err := p.advance()
 		if err != nil {

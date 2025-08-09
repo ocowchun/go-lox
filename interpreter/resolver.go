@@ -11,6 +11,15 @@ type FunctionType uint8
 const (
 	FunctionTypeNone FunctionType = iota
 	FunctionTypeFunction
+	FunctionTypeMethod
+	FunctionTypeInitializer
+)
+
+type ClassType uint8
+
+const (
+	ClassTypeNone ClassType = iota
+	ClassTypeClass
 )
 
 type NameMetadata struct {
@@ -25,6 +34,7 @@ type Resolver struct {
 	interpreter         *Interpreter
 	scopes              []map[string]*NameMetadata
 	currentFunctionType FunctionType
+	currentClassType    ClassType
 }
 
 func NewResolver(interpreter *Interpreter) *Resolver {
@@ -32,6 +42,7 @@ func NewResolver(interpreter *Interpreter) *Resolver {
 		interpreter:         interpreter,
 		scopes:              []map[string]*NameMetadata{},
 		currentFunctionType: FunctionTypeNone,
+		currentClassType:    ClassTypeNone,
 	}
 }
 
@@ -222,6 +233,10 @@ func (r *Resolver) VisitReturnStatement(stmt *ast.ReturnStatement) any {
 	}
 
 	if stmt.Value != nil {
+		if r.currentFunctionType == FunctionTypeInitializer {
+			return NewResolveError(stmt.Keyword, "Can't return a value from an initializer.")
+		}
+
 		return r.ResolveExpression(stmt.Value)
 	}
 
@@ -229,6 +244,12 @@ func (r *Resolver) VisitReturnStatement(stmt *ast.ReturnStatement) any {
 }
 
 func (r *Resolver) VisitClassStatement(stmt *ast.ClassStatement) any {
+	enclosingClassType := r.currentClassType
+	r.currentClassType = ClassTypeClass
+	defer func() {
+		r.currentClassType = enclosingClassType
+	}()
+
 	err := r.declare(stmt.Name)
 	if err != nil {
 		return err
@@ -238,10 +259,26 @@ func (r *Resolver) VisitClassStatement(stmt *ast.ClassStatement) any {
 		return err
 	}
 
-	// TODO: resolve methods
+	r.beginScope()
+	defer r.endScope()
+	r.scopes[len(r.scopes)-1]["this"] = &NameMetadata{
+		initialized: true, // 'this' is always initialized in a class
+		used:        true, // 'this' is always used in a class
+	}
+
+	for _, method := range stmt.Methods {
+		declaration := FunctionTypeMethod
+		if method.Name.Lexeme == "init" {
+			declaration = FunctionTypeInitializer
+		}
+
+		err = r.resolveFunction(method.Parameters, method.Body, declaration)
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
-
 }
 
 // Expression
@@ -307,13 +344,14 @@ func (r *Resolver) resolveLocal(expr ast.Expr, name token.Token) error {
 }
 
 func (r *Resolver) VisitVariableExpression(expr *ast.VariableExpression) any {
+	// TODO: the logic is a bit different from the original implementation
+	// check it later to see if any bug hidden here
 	if len(r.scopes) > 0 {
 		metadata, ok := r.scopes[len(r.scopes)-1][expr.Name.Lexeme]
 		if !ok {
-			// Variable is not defined in the current scope
-			// We assume it's a global variable
-			return nil
+			return r.resolveLocal(expr, expr.Name)
 		}
+
 		if !metadata.initialized {
 			return NewResolveError(expr.Name, "Can't read local variable in its own initializer.")
 		}
@@ -362,15 +400,23 @@ func (r *Resolver) VisitFunctionExpression(expr *ast.FunctionExpression) any {
 	return r.resolveFunction(expr.Parameters, expr.Body, FunctionTypeFunction)
 }
 
-func (r Resolver) VisitGetExpression(expr *ast.GetExpression) any {
+func (r *Resolver) VisitGetExpression(expr *ast.GetExpression) any {
 	return r.ResolveExpression(expr.Object)
 }
 
-func (r Resolver) VisitSetExpression(expr *ast.SetExpression) any {
+func (r *Resolver) VisitSetExpression(expr *ast.SetExpression) any {
 	err := r.ResolveExpression(expr.Object)
 	if err != nil {
 		return err
 	}
 
 	return r.ResolveExpression(expr.Value)
+}
+
+func (r *Resolver) VisitThisExpression(expr *ast.ThisExpression) any {
+	if r.currentClassType == ClassTypeNone {
+		return NewResolveError(expr.Keyword, "Can't use 'this' outside of a class.")
+	}
+
+	return r.resolveLocal(expr, expr.Keyword)
 }

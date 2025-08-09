@@ -223,3 +223,7 @@ func (printer *Printer) VisitSetExpression(expr *SetExpression) any {
 		printer.PrintExpression(expr.Value),
 	)
 }
+
+func (printer *Printer) VisitThisExpression(expr *ThisExpression) any {
+	return "(this)"
+}
