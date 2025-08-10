@@ -938,6 +938,28 @@ func (p *Parser) parsePrimary() (ast.Expr, error) {
 		return &ast.LiteralExpression{Value: nil}, nil
 	}
 
+	if p.currentTokenIs(token.TokenTypeSuper) {
+		t, err := p.consume(token.TokenTypeSuper, "expect super expression")
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = p.consume(token.TokenTypeDot, "expect `.` after `super`")
+		if err != nil {
+			return nil, err
+		}
+
+		method, err := p.consume(token.TokenTypeIdentifier, "expect method name after super")
+		if err != nil {
+			return nil, err
+		}
+
+		return &ast.SuperExpression{
+			Keyword: t,
+			Method:  method,
+		}, nil
+	}
+
 	if p.currentTokenIs(token.TokenTypeThis) {
 		t, err := p.consume(token.TokenTypeThis, "expect this expression")
 		if err != nil {

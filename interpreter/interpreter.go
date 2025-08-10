@@ -174,82 +174,31 @@ func (interpreter *Interpreter) executeBlockStatement(stmt *ast.BlockStatement, 
 	return StatementResult{}
 }
 
-type Class struct {
-	name    string
-	methods map[string]*Function
-}
-
-func NewClass(name string, methods map[string]*Function) *Class {
-	return &Class{
-		name:    name,
-		methods: methods,
-	}
-}
-
-func (c *Class) String() string {
-	return c.name
-}
-
-func (c *Class) Call(interpreter *Interpreter, args []any) EvaluatedResult {
-	instance := NewInstance(c)
-	initializer := c.FindMethod("init")
-	if initializer != nil {
-		initializer.Bind(instance).Call(interpreter, args)
-	}
-
-	return EvaluatedResult{
-		Value: instance,
-	}
-}
-
-func (c *Class) Arity() int {
-	initializer := c.FindMethod("init")
-	if initializer != nil {
-		return initializer.Arity()
-	}
-
-	return 0
-}
-
-func (c *Class) FindMethod(name string) *Function {
-	return c.methods[name]
-}
-
-type Instance struct {
-	class  *Class
-	fields map[string]any
-}
-
-func NewInstance(class *Class) *Instance {
-	return &Instance{
-		class:  class,
-		fields: make(map[string]any),
-	}
-}
-
-func (i *Instance) String() string {
-	return fmt.Sprintf("%s instance", i.class.name)
-}
-
-func (i *Instance) Get(name token.Token) (any, error) {
-	if value, exists := i.fields[name.Lexeme]; exists {
-		return value, nil
-	}
-
-	method := i.class.FindMethod(name.Lexeme)
-	if method != nil {
-		return method.Bind(i), nil
-	}
-
-	return nil, fmt.Errorf("undefined property '%s' in instance of class '%s'", name.Lexeme, i.class.name)
-}
-
-func (i *Instance) Set(name token.Token, value any) {
-	i.fields[name.Lexeme] = value
-}
-
 func (interpreter *Interpreter) VisitClassStatement(stmt *ast.ClassStatement) any {
+	var superclass *Class
+	if stmt.Superclass != nil {
+		res := interpreter.Evaluate(stmt.Superclass)
+		if res.Error != nil {
+			return StatementResult{Error: res.Error}
+		}
+
+		var ok bool
+		if superclass, ok = res.Value.(*Class); !ok {
+			return StatementResult{
+				Error: NewRuntimeError(
+					stmt.Superclass.Name,
+					fmt.Sprintf("Superclass must be a class, got %T", res.Value),
+				),
+			}
+		}
+	}
+
 	interpreter.environment.Define(stmt.Name.Lexeme, nil)
+
+	if stmt.Superclass != nil {
+		interpreter.environment = NewEnvironment(interpreter.environment)
+		interpreter.environment.Define("super", superclass)
+	}
 
 	methods := make(map[string]*Function)
 	for _, methodStmt := range stmt.Methods {
@@ -257,7 +206,11 @@ func (interpreter *Interpreter) VisitClassStatement(stmt *ast.ClassStatement) an
 		methods[methodStmt.Name.Lexeme] = method
 	}
 
-	class := NewClass(stmt.Name.Lexeme, methods)
+	class := NewClass(stmt.Name.Lexeme, superclass, methods)
+	if stmt.Superclass != nil {
+		interpreter.environment = interpreter.environment.enclosing
+	}
+
 	err := interpreter.environment.Assign(stmt.Name, class)
 	if err != nil {
 		return StatementResult{Error: err}
@@ -822,5 +775,52 @@ func (interpreter *Interpreter) VisitThisExpression(expr *ast.ThisExpression) an
 
 	return EvaluatedResult{
 		Value: val,
+	}
+}
+
+func (interpreter *Interpreter) VisitSuperExpression(expr *ast.SuperExpression) any {
+	distance := interpreter.locals[expr]
+	obj, err := interpreter.environment.GetAt(expr.Keyword, distance)
+	if err != nil {
+		return EvaluatedResult{Error: NewRuntimeError(expr.Keyword, err.Error())}
+	}
+
+	superclass, ok := obj.(*Class)
+	if !ok {
+		return EvaluatedResult{
+			Error: NewRuntimeError(
+				expr.Keyword,
+				fmt.Sprintf("expect super to be a class, got %T", obj),
+			),
+		}
+	}
+
+	obj, err = interpreter.environment.GetAt(token.Token{Lexeme: "this"}, distance-1)
+	if err != nil {
+		return EvaluatedResult{Error: NewRuntimeError(expr.Keyword, err.Error())}
+	}
+
+	instance, ok := obj.(*Instance)
+	if !ok {
+		return EvaluatedResult{
+			Error: NewRuntimeError(
+				expr.Keyword,
+				fmt.Sprintf("expect this to be an instance, got %T", obj),
+			),
+		}
+	}
+
+	method := superclass.FindMethod(expr.Method.Lexeme)
+	if method == nil {
+		return EvaluatedResult{
+			Error: NewRuntimeError(
+				expr.Method,
+				fmt.Sprintf("undefined method `%s` for superclass `%s`", expr.Method.Lexeme, superclass.name),
+			),
+		}
+	}
+
+	return EvaluatedResult{
+		Value: method.Bind(instance),
 	}
 }

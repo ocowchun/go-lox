@@ -231,3 +231,7 @@ func (printer *Printer) VisitSetExpression(expr *SetExpression) any {
 func (printer *Printer) VisitThisExpression(expr *ThisExpression) any {
 	return "(this)"
 }
+
+func (printer *Printer) VisitSuperExpression(expr *SuperExpression) any {
+	return fmt.Sprintf("(super %s)", expr.Method.Lexeme)
+}

@@ -1,10 +1,19 @@
-fun foo() {
-    var a = 123;
-
-    fun bar() {
-        print a;
-    }
-    bar();
+class A {
+  method() {
+    print "A method";
+  }
 }
 
-foo();
+class B < A {
+  method() {
+    print "B method";
+  }
+
+  test() {
+    super.method();
+  }
+}
+
+class C < B {}
+
+C().test();

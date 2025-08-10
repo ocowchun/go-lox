@@ -277,6 +277,13 @@ func (r *Resolver) VisitClassStatement(stmt *ast.ClassStatement) any {
 		if err != nil {
 			return err
 		}
+
+		r.beginScope()
+		defer r.endScope()
+		r.scopes[len(r.scopes)-1]["super"] = &NameMetadata{
+			initialized: true, // 'super' is always initialized in a class
+			used:        true, // 'super' is always used in a class
+		}
 	}
 
 	r.beginScope()
@@ -439,5 +446,9 @@ func (r *Resolver) VisitThisExpression(expr *ast.ThisExpression) any {
 		return NewResolveError(expr.Keyword, "Can't use 'this' outside of a class.")
 	}
 
+	return r.resolveLocal(expr, expr.Keyword)
+}
+
+func (r *Resolver) VisitSuperExpression(expr *ast.SuperExpression) any {
 	return r.resolveLocal(expr, expr.Keyword)
 }

@@ -91,6 +91,8 @@ func TestParser_parseExpression(t *testing.T) {
 		{"call expression 2", "foo(1, 2)", "(foo 1 2)"},
 		{"function expression", "fun (a) { print a; }", "(lambda (a) (begin\n(print a)\n))"},
 		{"get expression", "a.b", "(get a b)"},
+		{"this expression", "this", "(this)"},
+		{"super expression", "super.foo", "(super foo)"},
 	}
 
 	for _, testCase := range testCases {

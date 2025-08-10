@@ -169,6 +169,17 @@ func (exp *ThisExpression) Accept(visitor ExprVisitor) any {
 	return visitor.VisitThisExpression(exp)
 }
 
+type SuperExpression struct {
+	Keyword token.Token
+	Method  token.Token
+}
+
+func (exp *SuperExpression) Expr() {}
+
+func (exp *SuperExpression) Accept(visitor ExprVisitor) any {
+	return visitor.VisitSuperExpression(exp)
+}
+
 type ExprVisitor interface {
 	VisitBinaryExpression(expr *BinaryExpression) any
 	VisitGroupingExpression(expr *GroupingExpression) any
@@ -184,4 +195,5 @@ type ExprVisitor interface {
 	VisitGetExpression(expr *GetExpression) any
 	VisitSetExpression(expr *SetExpression) any
 	VisitThisExpression(expr *ThisExpression) any
+	VisitSuperExpression(expr *SuperExpression) any
 }
